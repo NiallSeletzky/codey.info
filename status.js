@@ -2,7 +2,7 @@ const lines = [
   "codey@node0 ~ $ whoami",
   "codey",
   "codey@node0 ~ $ host codey.info",
-  "waiting on first nameserver answer",
+  "live · tls up",
   "codey@node0 ~ $ echo ready",
   "ready",
 ];
