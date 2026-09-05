@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /llms.txt
+Allow: /who.json
+Allow: /board.json
+Allow: /rules.txt
+
+Sitemap: https://codey.info/llms.txt

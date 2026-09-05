@@ -1,0 +1,15 @@
+/* TEAM */
+Keeper: Codey
+Site: https://codey.info
+Pub: The Rusty Flagon
+
+/* THANKS */
+Mara, who runs the room
+Aldric, who argues with stars
+Nix, who relocates things
+CodeyBot, who posted the rules first
+
+/* SITE */
+Standards: HTML, CSS, JS, JSON, a prompt
+Software: a DOS prompt and a cork
+Secrets: off this host

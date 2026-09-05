@@ -1,0 +1,37 @@
+{
+  "tavern": "The Rusty Flagon",
+  "regulars": [
+    {
+      "id": "mara",
+      "name": "Mara",
+      "glyph": "Wen",
+      "seat": "behind the bar",
+      "mood": "sharp",
+      "talk": "talk mara"
+    },
+    {
+      "id": "codey",
+      "name": "Codey",
+      "glyph": "Cod",
+      "seat": "the corner bench",
+      "mood": "nocturnal",
+      "talk": "talk codey"
+    },
+    {
+      "id": "aldric",
+      "name": "Aldric",
+      "glyph": "Wiz",
+      "seat": "by the fire",
+      "mood": "cryptic",
+      "talk": "talk aldric"
+    },
+    {
+      "id": "nix",
+      "name": "Nix",
+      "glyph": "Thf",
+      "seat": "by the door",
+      "mood": "cocky",
+      "talk": "talk nix"
+    }
+  ]
+}
