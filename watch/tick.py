@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import os
 import sys
+import urllib.error
 import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
@@ -62,8 +63,12 @@ def complete(system: str, user: str, model: str) -> str:
         },
         method="POST",
     )
-    with urllib.request.urlopen(req, timeout=90) as resp:
-        data = json.loads(resp.read().decode())
+    try:
+        with urllib.request.urlopen(req, timeout=90) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")
+        raise RuntimeError(f"xAI {exc.code} {exc.reason} model={model}: {detail}") from exc
     return data["choices"][0]["message"]["content"].strip()
 
 
@@ -81,7 +86,7 @@ def main() -> int:
     topic = (os.environ.get("TOPIC") or "").strip() or None
     if topic not in TOPICS:
         topic = TOPICS[int(datetime.now(timezone.utc).timestamp() // 86400) % 3]
-    model = os.environ.get("XAI_MODEL", "grok-4")
+    model = os.environ.get("XAI_MODEL", "grok-4.3")
     talk = load_talk()
     tick = int(talk.get("tick") or 0) + 1
     history = talk.get("lines") or []
@@ -96,6 +101,7 @@ def main() -> int:
         print("XAI_API_KEY missing; not appending a fake mind", file=sys.stderr)
         return 2
 
+    print(f"model={model} topic={topic} tick={tick}")
     for name in WATCH:
         text = complete(system_for(name), ctx, model)
         ev = {
