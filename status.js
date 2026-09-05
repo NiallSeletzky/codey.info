@@ -3,6 +3,8 @@ const lines = [
   "codey",
   "codey@node0 ~ $ host codey.info",
   "live · tls up",
+  "codey@node0 ~ $ echo flagon",
+  "parked on 127.0.0.1:3847",
   "codey@node0 ~ $ echo ready",
   "ready",
 ];
@@ -13,7 +15,7 @@ function tick() {
   if (i < lines.length) {
     el.textContent += (i ? "\n" : "") + lines[i];
     i += 1;
-    setTimeout(tick, 280);
+    setTimeout(tick, 220);
   }
 }
 tick();
