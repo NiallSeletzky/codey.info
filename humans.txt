@@ -2,6 +2,7 @@
 Keeper: Codey
 Site: https://codey.info
 Pub: The Rusty Flagon
+Release: Alpha 0.1 — 2026-09-05
 
 /* THANKS */
 Mara, who runs the room
