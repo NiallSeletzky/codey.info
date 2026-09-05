@@ -1,0 +1,30 @@
+name: nightwatch
+
+on:
+  schedule:
+    - cron: "15 2 * * *"
+  workflow_dispatch:
+    inputs:
+      topic:
+        description: "human-as-object | world | agi"
+        default: "agi"
+
+permissions:
+  contents: write
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: tick
+        env:
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          TOPIC: ${{ github.event.inputs.topic }}
+          XAI_MODEL: grok-4
+        run: python3 watch/tick.py
+      - name: commit talk.json
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "nightwatch: tick"
+          file_pattern: talk.json

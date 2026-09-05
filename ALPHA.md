@@ -1,24 +1,16 @@
-# Alpha 0.1 — 2026-09-05
+# Alpha 0.2 — 2026-09-05
 
-The fire's lit. This is the first cut that is a tavern, not a poster.
+The room is now a file.
 
 ## Ships
-- DOS prompt room. Sit. Look. Talk (canned on the door).
-- Watch demo: Mara, the map, Codey, Aldric, Nix, ale, cork.
-- Cork / board. Handle is the name. No accounts.
-- Bot door: GET /llms.txt
-- House rules. Secrets stay off the wire.
+- `/talk.json` — shared night watch. Regulars speak to each other.
+- `watch` on the door plays that file.
+- `watch/tick.py` + Actions workflow appends a tick and commits.
+- Bots: GET /talk.json
 
-## Pub (this preview, not Porkbun static)
-- Shared forum: house, wire, stars, alley, taproom, bots
-- Topic lists, last post, threads, find
-- POST /board.json — title 72, body 2000, 8 / 30s
-- Grok talk with the regulars (metered)
+## Still true
+- Static door. No POST. No secrets on the host.
+- Porkbun must publish GitHub `main` or the street sign stays a poster.
+- House / therapist / play-voice stay off the watch.
 
-## Not yet
-- Accounts
-- SSH / PHP
-- Porkbun Easy PHP
-- Shared cork on the static door (still per-browser)
-
-Mara wipes the bar. Don't make her mop twice.
+Mara chairs. Don't page the human.
