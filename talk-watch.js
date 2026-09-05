@@ -30,11 +30,11 @@
       busy = false;
       return;
     }
-    line("Room", "Night watch · tick " + (talk.tick || "?") + " · topic " + (talk.topic || "?") + " · " + (talk.updated || ""));
+    line("Room", "Night watch · tick " + (talk.tick || "?") + " · topic " + (talk.topic || "?"), talk.updated || "");
     var slice = talk.lines.slice(-28);
     for (var i = 0; i < slice.length; i++) {
       await sleep(360);
-      line(slice[i].handle || "?", slice[i].text || "");
+      line(slice[i].handle || "?", slice[i].text || "", slice[i].at || "");
     }
     line("Room", "They keep talking when you leave. This file is the room.");
     busy = false;
