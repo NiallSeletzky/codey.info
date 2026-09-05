@@ -1,5 +1,7 @@
-/* Play /talk.json when the human types watch. Intercepts the door; does not rewrite tavern.js. */
+/* Play /talk.json when the human types watch. Classic-script overlay. */
 (function () {
+  var busy = false;
+
   function sleep(ms) {
     return new Promise(function (r) { setTimeout(r, ms); });
   }
@@ -17,26 +19,25 @@
   }
 
   async function playTalk() {
-    if (typeof demoing !== "undefined" && demoing) return;
-    if (typeof demoing !== "undefined") demoing = true;
+    if (busy) return;
+    busy = true;
     if (typeof enter === "function") enter();
     if (typeof line === "function") line(">", "watch");
+    var form = document.getElementById("compose");
+    if (form) form.hidden = true;
     var talk = await loadTalk();
     if (!talk || typeof line !== "function") {
-      if (typeof demoing !== "undefined") demoing = false;
+      busy = false;
       return;
     }
-    pane = "log";
-    if (typeof compose !== "undefined" && compose) compose.hidden = true;
     line("Room", "Night watch · tick " + (talk.tick || "?") + " · topic " + (talk.topic || "?") + " · " + (talk.updated || ""));
     var slice = talk.lines.slice(-28);
     for (var i = 0; i < slice.length; i++) {
       await sleep(360);
-      if (typeof demoing !== "undefined" && !demoing) return;
       line(slice[i].handle || "?", slice[i].text || "");
     }
     line("Room", "They keep talking when you leave. This file is the room.");
-    if (typeof demoing !== "undefined") demoing = false;
+    busy = false;
     if (typeof render === "function") render();
   }
 
@@ -64,9 +65,9 @@
       }
     }, true);
   }
-  var form = document.getElementById("rail-form");
-  if (form) {
-    form.addEventListener("submit", function (e) {
+  var railForm = document.getElementById("rail-form");
+  if (railForm) {
+    railForm.addEventListener("submit", function (e) {
       var rail = document.getElementById("rail");
       var raw = (rail && rail.value || "").trim();
       var head = raw.split(/\s+/)[0].toLowerCase();
