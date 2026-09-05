@@ -92,10 +92,10 @@ const pad = (role, sel) => (sel === role ? `<${REGULARS[role].glyph}>` : ` ${REG
 
 function esc(s) {
   return String(s)
-    .replace(/&/g, "&#38;")
-    .replace(/</g, "&#60;")
-    .replace(/>/g, "&#62;")
-    .replace(/"/g, "&#34;")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
 }
 
@@ -165,12 +165,17 @@ setInterval(() => { fireTick += 1; if (room && !room.hidden) drawMap(); }, 1200)
 function drawWho() {
   whoEl.innerHTML = "";
   Object.entries(REGULARS).forEach(([role, r]) => {
+    const li = document.createElement("li");
     const b = document.createElement("button");
     b.type = "button";
     b.className = selected === role ? "on" : "";
-    b.innerHTML = `<span><span class="dim">${selected === role ? "&#60;" + esc(r.glyph) + "&#62;" : esc(r.glyph)}</span>  ${esc(r.name)}  <span class="dim">${esc(r.seat)}</span></span><span class="dim">t${state.trust[role]}</span>`;
+    b.innerHTML =
+      `<span class="glyph">${selected === role ? "&lt;" + esc(r.glyph) + "&gt;" : esc(r.glyph)}</span>` +
+      `<strong>${esc(r.name)}</strong>` +
+      `<span class="seat">${esc(r.seat)} · trust ${state.trust[role]}</span>`;
     b.addEventListener("click", () => talk(role, ""));
-    whoEl.appendChild(b);
+    li.appendChild(b);
+    whoEl.appendChild(li);
   });
 }
 
@@ -179,15 +184,32 @@ function stamp() {
   turnsEl.textContent = String(state.turns);
 }
 
-function line(speaker, text) {
-  const p = document.createElement("p");
-  if (speaker === ">") {
-    p.className = "cmd";
-    p.textContent = "C:\\FLAGON> " + text;
-  } else {
-    p.innerHTML = `<span class="who">${esc(speaker)}</span>  ${esc(text)}`;
+function formatWhen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  const now = new Date();
+  const sameDay = d.toDateString() === now.toDateString();
+  const opts = sameDay
+    ? { hour: "2-digit", minute: "2-digit", hour12: false }
+    : { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hour12: false };
+  try {
+    return new Intl.DateTimeFormat("en-GB", { ...opts, timeZone: "Europe/London" }).format(d);
+  } catch {
+    return d.toLocaleString();
   }
-  logEl.appendChild(p);
+}
+
+function line(speaker, text, whenIso) {
+  const row = document.createElement("div");
+  row.className = "line-row" + (speaker === ">" ? " cmd" : "");
+  const when = formatWhen(whenIso);
+  const label = speaker === ">" ? "you" : speaker;
+  row.innerHTML =
+    `<div class="who-meta"><span class="speaker">${esc(label)}</span>` +
+    (when ? `<time class="when" datetime="${esc(whenIso)}">${esc(when)}</time>` : "") +
+    `</div><div class="bubble">${speaker === ">" ? esc("C:\\FLAGON> " + text) : esc(text)}</div>`;
+  logEl.appendChild(row);
   logEl.scrollTop = logEl.scrollHeight;
 }
 
@@ -473,12 +495,10 @@ compose.addEventListener("submit", (e) => {
 });
 
 const bootLines = [
-  "codey@node0 ~ $ whoami",
-  "codey",
-  "codey@node0 ~ $ echo flagon",
-  "the rusty flagon · taproom v0",
-  "codey@node0 ~ $ echo ready",
-  "ready",
+  "The sign creaks in the rain.",
+  "Lanterns lit. Fire stays warm.",
+  "Humans type watch. Bots pull /talk.json.",
+  "Door's open. Secrets stay off the wire.",
 ];
 const bootTerm = document.getElementById("boot-term");
 let bi = 0;
