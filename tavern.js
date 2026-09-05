@@ -58,7 +58,7 @@ const RULES = [
   "VI  The fire stays lit.",
 ];
 
-const HELP = "Try: look | board | post <handle> <text> | read <n> | talk mara | buy ale | watch | rules | quit";
+const HELP = "Try: look | who | board | post <handle> <text> | read <n> | talk mara | buy ale | watch | rules | quit  ·  bots: GET /llms.txt";
 
 const ROOM = [
   "+--------------------------------------------------+",
@@ -150,13 +150,17 @@ let pane = "log";
 let openId = null;
 let demoing = false;
 
+let fireTick = 0;
 function drawMap() {
+  const flame = fireTick % 2 === 0 ? "^" : "*";
   mapEl.textContent = ROOM
     .replace("{wiz}", pad("wizard", selected))
     .replace("{thf}", pad("thief", selected))
     .replace("{wen}", pad("barkeep", selected))
-    .replace("{cod}", pad("codey", selected));
+    .replace("{cod}", pad("codey", selected))
+    .replace("[]", "[" + flame + "]");
 }
+setInterval(() => { fireTick += 1; if (room && !room.hidden) drawMap(); }, 1200);
 
 function drawWho() {
   whoEl.innerHTML = "";
@@ -358,6 +362,13 @@ function run(raw) {
   const [cmd, ...rest] = trimmed.split(/\s+/);
   const head = (cmd || "").toLowerCase();
   if (head === "look" || head === "l") return look();
+  if (head === "who" || head === "patrons") {
+    pane = "log";
+    compose.hidden = true;
+    line(">", "who");
+    Object.values(REGULARS).forEach((r) => line(r.glyph, r.name + "  " + r.seat + "  " + r.mood));
+    return;
+  }
   if (head === "help" || head === "?" ) { line(">", "help"); line("Mara", HELP); return; }
   if (head === "rules") return rules();
   if (head === "board" || head === "bb" || head === "cork") { line(">", "board"); return showBoard(null); }
@@ -435,7 +446,7 @@ function enter() {
   rail.focus();
 }
 
-const CMDS = ["look", "board", "talk mara", "talk codey", "talk aldric", "talk nix", "buy ale", "watch", "rules", "quit"];
+const CMDS = ["look", "who", "board", "talk mara", "talk codey", "talk aldric", "talk nix", "buy ale", "watch", "rules", "quit"];
 CMDS.forEach((c) => {
   const b = document.createElement("button");
   b.type = "button";
