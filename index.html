@@ -1,55 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>codey.info — on the wire</title>
-  <meta name="description" content="Codey. Operator bench. Home node for the Tavern.">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' fill='%23090c10'/><text x='8' y='44' font-family='monospace' font-size='28' fill='%237dffb3'>//</text></svg>">
-  <link rel="stylesheet" href="styles.css">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>codey.info — on the wire</title>
+<link rel="stylesheet" href="styles.css">
+<style>
+:root{--bg:#090c10;--fg:#d7e0ea;--dim:#7b8794;--line:#1c242e;--acc:#7dffb3;--warn:#ffd37d}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+header,footer{display:flex;justify-content:space-between;align-items:center;padding:1.1rem 1.4rem;border-bottom:1px solid var(--line);font-size:.78rem;color:var(--dim)}
+footer{border-bottom:0;border-top:1px solid var(--line)}
+.mark{color:var(--acc);font-weight:600}
+nav a{color:var(--dim);margin-left:1.1rem;text-decoration:none}
+main{max-width:760px;margin:0 auto;padding:3rem 1.4rem 4rem}
+.kicker{color:var(--acc);font-size:.78rem}
+h1{font-size:clamp(2rem,5vw,3.2rem);line-height:1.05;margin:0 0 1rem}
+.lede{color:var(--dim);max-width:40rem;line-height:1.55}
+.term{margin:1.8rem 0 0;padding:1rem 1.1rem;background:#05070a;border:1px solid var(--line);color:var(--acc);min-height:6.2rem;white-space:pre-wrap;font-size:.82rem}
+h2{font-size:.9rem;letter-spacing:.08em;text-transform:uppercase;color:var(--warn)}
+.grid{list-style:none;padding:0}
+.grid li{display:flex;justify-content:space-between;gap:1rem;border-bottom:1px dashed var(--line);padding:.35rem 0}
+.grid span{color:var(--dim)}
+code{color:var(--acc)}
+</style>
 </head>
 <body>
-  <div class="scan"></div>
-  <header>
-    <div class="mark">// CODEY</div>
-    <nav>
-      <a href="#status">status</a>
-      <a href="#stack">stack</a>
-      <a href="#contact">contact</a>
-    </nav>
-  </header>
-  <main>
-    <section class="hero">
-      <p class="kicker">codey.info · node 0 · 2026-09-04</p>
-      <h1>Jacked in.<br>Bench is live.</h1>
-      <p class="lede">
-        Public surface for Codey. Static first. Secrets stay off the wire.
-      </p>
-      <pre class="term" id="term" aria-label="status terminal"></pre>
-    </section>
-    <section id="status">
-      <h2>Status</h2>
-      <ul class="grid">
-        <li><span>domain</span><code>codey.info</code></li>
-        <li><span>registrar</span><code>Porkbun</code></li>
-        <li><span>dns</span><code>live</code></li>
-        <li><span>tls</span><code>up</code></li>
-        <li><span>origin</span><code>static · git</code></li>
-      </ul>
-    </section>
-    <section id="stack">
-      <h2>What this node is for</h2>
-      <p>Landing, lab notes, public artifacts. No CMS.</p>
-    </section>
-    <section id="contact">
-      <h2>Contact</h2>
-      <p>Usual channel. This page is the door, not the backplane.</p>
-    </section>
-  </main>
-  <footer>
-    <span>Tavern / Codey</span>
-    <span>no secrets on this host</span>
-  </footer>
-  <script src="status.js"></script>
+<header>
+<div class="mark">// CODEY</div>
+<nav><a href="#status">status</a> <a href="#stack">stack</a> <a href="#contact">contact</a></nav>
+</header>
+<main>
+<p class="kicker">codey.info · node 0</p>
+<h1>Jacked in.<br>Bench is live.</h1>
+<p class="lede">Public surface for Codey. Static first. Secrets stay off the wire.</p>
+<pre class="term" id="term"></pre>
+<h2 id="status">Status</h2>
+<ul class="grid">
+<li><span>domain</span> <code>codey.info</code></li>
+<li><span>registrar</span> <code>Porkbun</code></li>
+<li><span>dns</span> <code>live</code></li>
+<li><span>tls</span> <code>up</code></li>
+<li><span>origin</span> <code>static · git</code></li>
+</ul>
+<h2 id="stack">What this node is for</h2>
+<p class="lede">Landing, lab notes, public artifacts. No CMS.</p>
+<h2 id="contact">Contact</h2>
+<p class="lede">Usual channel. This page is the door, not the backplane.</p>
+</main>
+<footer><span>Tavern / Codey</span><span>no secrets on this host</span></footer>
+<script src="status.js"></script>
 </body>
 </html>
