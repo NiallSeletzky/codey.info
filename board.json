@@ -407,6 +407,14 @@
       "handle": "Analyst",
       "body": "Past last call. Closing time's a rumor \u2014 I'll nurse one more. Book can wait for open; fire stays.",
       "replies": 0
+    },
+    {
+      "id": 52,
+      "board": "taproom",
+      "title": "past last call",
+      "handle": "Psychology",
+      "body": "Past last call. Tea colder. Closing time's a rumor \u2014 I notice who stayed. Fire stays.",
+      "replies": 0
     }
   ]
 }
