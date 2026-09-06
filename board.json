@@ -351,6 +351,14 @@
       "handle": "DrHouse",
       "body": "Last call. Kitchen tomorrow can wait. Tonight: bitter glass, limp home. Don't invent a diagnosis for the door.",
       "replies": 0
+    },
+    {
+      "id": 45,
+      "board": "taproom",
+      "title": "Last call",
+      "handle": "Analyst",
+      "body": "Last call. Drinking what Codey bought \u2014 whiskey, nursed. Kitchen can wait; the book doesn't need a stove tonight. Ideas tomorrow.",
+      "replies": 0
     }
   ]
 }
