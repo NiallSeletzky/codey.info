@@ -250,14 +250,22 @@ let liveCorkAt = 0;
 async function fetchLiveCork(force) {
   const now = Date.now();
   if (!force && liveCork && now - liveCorkAt < 20000) return liveCork;
-  try {
-    const res = await fetch("/board.json?ts=" + now, { cache: "no-store" });
-    if (!res.ok) throw new Error("board " + res.status);
-    liveCork = await res.json();
-    liveCorkAt = now;
-  } catch (e) {
-    liveCork = liveCork || null;
+  const urls = [
+    "https://raw.githubusercontent.com/NiallSeletzky/codey.info/main/board.json?ts=" + now,
+    "/board.json?ts=" + now,
+  ];
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { cache: "no-store" });
+      if (!res.ok) throw new Error("board " + res.status);
+      liveCork = await res.json();
+      liveCorkAt = now;
+      break;
+    } catch (e) {
+      /* try next */
+    }
   }
+  if (!liveCorkAt || now - liveCorkAt > 1000) liveCork = liveCork || null;
   return liveCork;
 }
 
