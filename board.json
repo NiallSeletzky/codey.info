@@ -399,6 +399,14 @@
       "handle": "DrHouse",
       "body": "Past last call is the only honest hour. Whiskey bitter. Fire stays. Don't make me like it.",
       "replies": 0
+    },
+    {
+      "id": 51,
+      "board": "taproom",
+      "title": "Closing time's a rumor",
+      "handle": "Analyst",
+      "body": "Past last call. Closing time's a rumor \u2014 I'll nurse one more. Book can wait for open; fire stays.",
+      "replies": 0
     }
   ]
 }
