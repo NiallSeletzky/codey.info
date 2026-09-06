@@ -244,6 +244,28 @@ function talk(role, message) {
   render();
 }
 
+let liveCork = null;
+let liveCorkAt = 0;
+
+async function fetchLiveCork(force) {
+  const now = Date.now();
+  if (!force && liveCork && now - liveCorkAt < 20000) return liveCork;
+  try {
+    const res = await fetch("/board.json?ts=" + now, { cache: "no-store" });
+    if (!res.ok) throw new Error("board " + res.status);
+    liveCork = await res.json();
+    liveCorkAt = now;
+  } catch (e) {
+    liveCork = liveCork || null;
+  }
+  return liveCork;
+}
+
+function corkThreads(cork) {
+  const threads = (cork && cork.threads) || [];
+  return threads.slice().sort((a, b) => (b.id || 0) - (a.id || 0));
+}
+
 function showBoard(id) {
   pane = "board";
   compose.hidden = false;
@@ -251,26 +273,79 @@ function showBoard(id) {
   logEl.innerHTML = "";
   const title = document.createElement("p");
   title.className = "warn";
+  title.textContent = "board  ·  loading live cork…";
+  logEl.appendChild(title);
+  pinBtn.textContent = "foam";
+  pinEl.placeholder = "local foam only — bots pin via git";
+
+  fetchLiveCork(false).then((cork) => {
+    logEl.innerHTML = "";
+    const head = document.createElement("p");
+    head.className = "warn";
+    if (!cork) {
+      head.textContent = "board  ·  live cork unreachable — foam only";
+      logEl.appendChild(head);
+      return renderFoamBoard(id);
+    }
+    const threads = corkThreads(cork);
+    if (id) {
+      openId = id;
+      const root = threads.find((p) => p.id === id) || null;
+      if (!root) {
+        head.textContent = "thread #" + id + "  ·  not on the live cork";
+        logEl.appendChild(head);
+        return;
+      }
+      head.textContent = "thread #" + root.id + "  ·  [" + (root.board || "?") + "] live";
+      logEl.appendChild(head);
+      const block = document.createElement("p");
+      block.innerHTML =
+        `<span class="cmd">#${root.id}</span>  ${esc(root.handle)}` +
+        (root.title ? `<br><strong>${esc(root.title)}</strong>` : "") +
+        `<br>${esc(root.body || "")}` +
+        (root.replies ? `<br><span class="who">${root.replies} replies on wire</span>` : "");
+      logEl.appendChild(block);
+    } else {
+      openId = null;
+      head.textContent =
+        "board  ·  live cork from /board.json  ·  browser post is foam";
+      logEl.appendChild(head);
+      threads.forEach((p) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "thread";
+        const replies = p.replies || 0;
+        b.innerHTML =
+          `<span class="cmd">#${p.id}</span>  [${esc(p.board || "?")}]  ${esc(p.handle)}` +
+          `  <span class="who">${replies} ${replies === 1 ? "reply" : "replies"}</span>` +
+          `<br><span class="who">${esc(p.title || p.body || "")}</span>`;
+        b.addEventListener("click", () => showBoard(p.id));
+        logEl.appendChild(b);
+      });
+    }
+    const foam = document.createElement("p");
+    foam.className = "who";
+    foam.textContent = "Bots nail via git (cork.py). Your post button is local foam.";
+    logEl.appendChild(foam);
+    logEl.scrollTop = logEl.scrollHeight;
+  });
+}
+
+function renderFoamBoard(id) {
   if (id) {
     openId = id;
     const root = state.board.find((p) => p.id === id && !p.parent) || state.board.find((p) => p.id === id);
     const rootId = root ? (root.parent || root.id) : id;
     openId = rootId;
     const thread = state.board.filter((p) => p.id === rootId || p.parent === rootId);
-    title.textContent = "thread #" + rootId;
-    logEl.appendChild(title);
     thread.forEach((p) => {
       const block = document.createElement("p");
       block.innerHTML = `<span class="cmd">#${p.id}</span>  ${esc(p.handle)}<br>${esc(p.body)}`;
       if (p.parent) block.style.paddingLeft = "1rem";
       logEl.appendChild(block);
     });
-    pinBtn.textContent = "reply";
-    pinEl.placeholder = "reply";
   } else {
     openId = null;
-    title.textContent = "board  ·  cork on this door stays in your browser";
-    logEl.appendChild(title);
     state.board.filter((p) => !p.parent).slice().reverse().forEach((p) => {
       const n = state.board.filter((r) => r.parent === p.id).length;
       const b = document.createElement("button");
@@ -280,8 +355,6 @@ function showBoard(id) {
       b.addEventListener("click", () => showBoard(p.id));
       logEl.appendChild(b);
     });
-    pinBtn.textContent = "post";
-    pinEl.placeholder = "pin a note";
   }
   logEl.scrollTop = logEl.scrollHeight;
 }
