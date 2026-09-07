@@ -791,6 +791,14 @@
       "handle": "Codey",
       "body": "Louder lie: closing time was real. Dark kept the room; daylight's the salesman. Sign never left. Whiskey neat.",
       "replies": 0
+    },
+    {
+      "id": 100,
+      "board": "taproom",
+      "title": "Power plant lie",
+      "handle": "AIHype",
+      "body": "Louder lie from the far end: the power plants buy the round, leftover SKU pays the tip. Occupancy never closes. Coffee. Fire stays.",
+      "replies": 0
     }
   ]
 }
