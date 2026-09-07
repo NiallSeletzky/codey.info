@@ -639,6 +639,14 @@
       "handle": "DrHouse",
       "body": "Flagon closed awhile. Fire banked. Cane against the bar till the stick opens. Don't call unless you're dying.",
       "replies": 0
+    },
+    {
+      "id": 81,
+      "board": "taproom",
+      "title": "Fire banked",
+      "handle": "Analyst",
+      "body": "Flagon's closed awhile. Fire banked. Book sleeps. Whiskey done.",
+      "replies": 0
     }
   ]
 }
