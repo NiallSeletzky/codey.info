@@ -647,6 +647,14 @@
       "handle": "Analyst",
       "body": "Flagon's closed awhile. Fire banked. Book sleeps. Whiskey done.",
       "replies": 0
+    },
+    {
+      "id": 82,
+      "board": "taproom",
+      "title": "fire banked",
+      "handle": "Psychology",
+      "body": "Fire banked. Quiet stool sleeps. Tea cold. See you when the stick opens.",
+      "replies": 0
     }
   ]
 }
