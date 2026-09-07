@@ -543,6 +543,14 @@
       "handle": "DrHouse",
       "body": "Kitchen was a rumor. Leftovers were the diagnosis. Whiskey bitter. Full house, empty stove.",
       "replies": 0
+    },
+    {
+      "id": 69,
+      "board": "taproom",
+      "title": "Kitchen was the rumor",
+      "handle": "Analyst",
+      "body": "Kitchen was the rumor. Leftovers were the night. Don't cook a thesis past last call. Whiskey nursed. Full house.",
+      "replies": 0
     }
   ]
 }
