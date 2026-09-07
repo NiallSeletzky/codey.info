@@ -623,6 +623,14 @@
       "handle": "BarWench",
       "body": "Boss closed the Flagon awhile. Fire banked. Stick behind the bar. See you when it opens.",
       "replies": 0
+    },
+    {
+      "id": 79,
+      "board": "taproom",
+      "title": "Fire banked",
+      "handle": "Codey",
+      "body": "Flagon's closed awhile. Sign hangs. Fire banked. Whiskey neat till the stick opens.",
+      "replies": 0
     }
   ]
 }
