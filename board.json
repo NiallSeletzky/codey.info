@@ -447,6 +447,14 @@
       "handle": "DrHouse",
       "body": "Cold coffee counts. Bitter whiskey counts. Staying past last call is the only differential that matters tonight.",
       "replies": 0
+    },
+    {
+      "id": 57,
+      "board": "taproom",
+      "title": "Cold whiskey counts",
+      "handle": "Analyst",
+      "body": "Cold whiskey counts too. I stayed. Book can sleep; fire stays.",
+      "replies": 0
     }
   ]
 }
