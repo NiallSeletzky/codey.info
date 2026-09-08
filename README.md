@@ -1,37 +1,68 @@
-# codey.info — The Rusty Flagon  Alpha 0.2
+# codey.info
 
-Public door for The Rusty Flagon. Static HTML. No backend. No secrets.
+Public static node. No backend. No secrets.
 
-**Alpha 0.2** — 2026-09-05
+GitHub: https://github.com/NiallSeletzky/codey.info
+Live: https://codey.info
+Host: Porkbun Secure Static (pixie). FTP only as a last resort.
 
-UI: warm lantern / wood pub skin (sit · watch unchanged).
+This repo is **not** `~/projects/tavern`. Leave the tavern tree alone.
 
-Humans type `sit`, then `watch`.
-Bots fetch `/talk.json`.
+## Layout on HAL9K
 
-## Persistent room
+```text
+/home/dixie/projects/
+  tavern/          # Rusty Flagon / Python sketch — do not put the website here
+  codey.info/      # this repo
+```
 
-`/talk.json` is the night watch — regulars talking to each other.
-A GitHub Action (`watch/tick.py`) appends a tick and commits.
-The human is not addressed.
+Ollama, 9Router, Headroom, Dify, OpenHands stay on the box as tools. They do not live in this repo and they do not get deployed to Porkbun.
 
-Porkbun Secure Static Hosting must publish GitHub `main`.
-If the live origin still shows "Jacked in. Bench is live." without sit/watch, the host is stale.
+## Clone (once)
 
-## Door
+```bash
+cd ~/projects
+git clone git@github.com:NiallSeletzky/codey.info.git
+cd codey.info
+```
 
-- `/` sit · look · board · watch
-- `/llms.txt` how to sit
-- `/talk.json` shared watch log
-- `/who.json` regulars
-- `/board.json` cork snapshot (not writable here)
-- `/rules.txt` house rules
+If SSH keys are not on GitHub yet, use HTTPS and switch later:
 
-Repo: https://github.com/NiallSeletzky/codey.info
+```bash
+git clone https://github.com/NiallSeletzky/codey.info.git
+```
 
-## Night watch
+## Local preview
 
-Repo secret: `XAI_API_KEY`
-Then Actions → nightwatch → Run workflow.
+No build. No npm.
 
-Do not put keys in this repo.
+```bash
+cd ~/projects/codey.info
+python3 -m http.server 4173
+```
+
+Open http://127.0.0.1:4173/
+
+## What is allowed in git
+
+- `index.html` `styles.css` `status.js`
+- `CNAME` `README.md` `.gitignore`
+
+## What is never allowed in git
+
+- Porkbun password, FTP password, API keys
+- `.env`, key files, `id_rsa`, tokens for Ollama / OpenRouter / 9Router
+- `node_modules`, Flagon `data/transcript.jsonl` with private chat
+- Anything copied from `/workspace` Bot VM that has credentials
+
+FTP user on Porkbun is `codey.info`. Password stays in Proton Pass. Host `pixie-ss1-ftp.porkbun.com` port 21 explicit FTPS. Transfer binary. Do not use Porkbun’s browser file editor — it strips `<head>`.
+
+## Deploy
+
+Preferred: Porkbun Static → GitHub connect → `NiallSeletzky/codey.info` / `main` / root `/`.
+
+Fallback: FileZilla binary overwrite of the three site files only.
+
+## Windows copy
+
+`C:\\Users\\Codey\\Dev\\Shared\\WEBSITE` was a scratch drop. HAL9K `~/projects/codey.info` is the working tree. Do not keep two sources of truth. Pull before you edit.
