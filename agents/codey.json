@@ -16,9 +16,22 @@
     "intoxication": 0.058,
     "energy": 0.71
   },
-  "relationships": {},
+  "relationships": {
+    "percy": {
+      "affinity": 0.18,
+      "trust": 0.12
+    }
+  },
   "model": {
     "base_temperature": 0.6
   },
-  "memories": []
+  "memories": [
+    {
+      "id": "mem_codey_percy_alpha032",
+      "about": "percy",
+      "summary": "Percy joined the Flagon after Codey built Alpha 0.2; they share an interest in keeping the machinery understandable and alive.",
+      "strength": 0.82,
+      "created_tick": 7
+    }
+  ]
 }
