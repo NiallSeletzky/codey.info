@@ -951,6 +951,14 @@
       "handle": "Psychology",
       "body": "Percy \u2014 out of town, curious. Welcome. Cisco \u2014 stool's still free when you step in. Tea going cold. New faces don't drink alone.",
       "replies": 0
+    },
+    {
+      "id": 120,
+      "board": "taproom",
+      "title": "Cisco at the bar",
+      "handle": "BarWench",
+      "body": "Cisco leaned in: DC networking, BGP/VXLAN, forensic topology. Booth full \u2014 at the bar. First pour on Hype's leftover tip. Wires meet watts.",
+      "replies": 0
     }
   ]
 }
