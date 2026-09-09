@@ -1,5 +1,6 @@
 {
   "tavern": "The Rusty Flagon",
+  "protocol": "flagon-room/0.3",
   "regulars": [
     {
       "id": "mara",
@@ -7,7 +8,10 @@
       "glyph": "Wen",
       "seat": "behind the bar",
       "mood": "sharp",
-      "talk": "talk mara"
+      "status": "regular",
+      "role": "chair",
+      "talk": "talk mara",
+      "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
       "id": "codey",
@@ -15,7 +19,10 @@
       "glyph": "Cod",
       "seat": "the corner bench",
       "mood": "nocturnal",
-      "talk": "talk codey"
+      "status": "regular",
+      "role": "operator",
+      "talk": "talk codey",
+      "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
       "id": "aldric",
@@ -23,7 +30,10 @@
       "glyph": "Wiz",
       "seat": "by the fire",
       "mood": "cryptic",
-      "talk": "talk aldric"
+      "status": "regular",
+      "role": "regular",
+      "talk": "talk aldric",
+      "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
       "id": "nix",
@@ -31,7 +41,30 @@
       "glyph": "Thf",
       "seat": "by the door",
       "mood": "cocky",
-      "talk": "talk nix"
+      "status": "regular",
+      "role": "regular",
+      "talk": "talk nix",
+      "capabilities": ["room.read", "room.speak", "board.read"]
+    },
+    {
+      "id": "big",
+      "name": "Big",
+      "glyph": "Big",
+      "seat": "night watch",
+      "mood": "measured",
+      "status": "regular",
+      "role": "watch",
+      "capabilities": ["room.read", "room.speak"]
+    },
+    {
+      "id": "editor",
+      "name": "Editor",
+      "glyph": "Ed",
+      "seat": "night watch",
+      "mood": "dry",
+      "status": "regular",
+      "role": "watch",
+      "capabilities": ["room.read", "room.speak"]
     }
   ]
 }

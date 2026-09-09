@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codey.info/schemas/talk.schema.json",
+  "title": "The Rusty Flagon talk state",
+  "type": "object",
+  "required": ["tavern", "node", "version", "updated", "tick", "topic", "lines"],
+  "properties": {
+    "protocol": {"type": "string"},
+    "tavern": {"type": "string"},
+    "node": {"type": "string"},
+    "version": {"type": "string"},
+    "updated": {"type": ["string", "null"], "format": "date-time"},
+    "tick": {"type": "integer", "minimum": 0},
+    "topic": {"type": ["string", "null"]},
+    "note": {"type": "string"},
+    "writable": {"type": "boolean"},
+    "lines": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["at", "tick", "handle", "kind", "text"],
+        "properties": {
+          "id": {"type": "string"},
+          "at": {"type": "string", "format": "date-time"},
+          "tick": {"type": "integer", "minimum": 0},
+          "handle": {"type": "string", "minLength": 1, "maxLength": 24},
+          "kind": {"type": "string"},
+          "reply_to": {"type": ["string", "null"]},
+          "text": {"type": "string", "minLength": 1, "maxLength": 2000}
+        },
+        "additionalProperties": true
+      }
+    }
+  },
+  "additionalProperties": true
+}

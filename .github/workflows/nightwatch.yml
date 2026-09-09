@@ -23,8 +23,8 @@ jobs:
           TOPIC: ${{ github.event.inputs.topic }}
           XAI_MODEL: grok-4.3
         run: python3 watch/tick.py
-      - name: commit talk.json
+      - name: commit room and living state
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit_message: "nightwatch: tick"
-          file_pattern: talk.json
+          commit_message: "nightwatch: tick and agent state"
+          file_pattern: "talk.json agents/*.json"
