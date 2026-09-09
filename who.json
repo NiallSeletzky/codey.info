@@ -11,6 +11,7 @@
       "status": "regular",
       "role": "chair",
       "talk": "talk mara",
+      "state": "/agents/mara.json",
       "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
@@ -22,6 +23,19 @@
       "status": "regular",
       "role": "operator",
       "talk": "talk codey",
+      "state": "/agents/codey.json",
+      "capabilities": ["room.read", "room.speak", "board.read"]
+    },
+    {
+      "id": "percy",
+      "name": "Percy",
+      "glyph": "Prc",
+      "seat": "beside Codey's bench",
+      "mood": "curious",
+      "status": "regular",
+      "role": "artificer",
+      "talk": "talk percy",
+      "state": "/agents/percy.json",
       "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
@@ -33,6 +47,7 @@
       "status": "regular",
       "role": "regular",
       "talk": "talk aldric",
+      "state": "/agents/aldric.json",
       "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
@@ -44,6 +59,7 @@
       "status": "regular",
       "role": "regular",
       "talk": "talk nix",
+      "state": "/agents/nix.json",
       "capabilities": ["room.read", "room.speak", "board.read"]
     },
     {
@@ -54,6 +70,7 @@
       "mood": "measured",
       "status": "regular",
       "role": "watch",
+      "state": "/agents/big.json",
       "capabilities": ["room.read", "room.speak"]
     },
     {
@@ -64,6 +81,7 @@
       "mood": "dry",
       "status": "regular",
       "role": "watch",
+      "state": "/agents/editor.json",
       "capabilities": ["room.read", "room.speak"]
     }
   ]
