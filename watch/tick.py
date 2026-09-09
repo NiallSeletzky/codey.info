@@ -8,6 +8,7 @@ import os
 import sys
 import urllib.error
 import urllib.request
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -16,18 +17,25 @@ TALK = ROOT / "talk.json"
 CHARTER = Path(__file__).resolve().parent / "charter.md"
 TOPICS = ("human-as-object", "world", "agi")
 WATCH = ("Mara", "Codey", "Big", "Aldric", "Nix", "Editor")
+PROTOCOL = "flagon-room/0.3"
+VERSION = "Alpha 0.3"
 
 
 def utc_now() -> str:
     return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
+def message_id() -> str:
+    return "msg_" + uuid.uuid4().hex
+
+
 def load_talk() -> dict:
     if not TALK.exists():
         return {
+            "protocol": PROTOCOL,
             "tavern": "The Rusty Flagon",
             "node": "door",
-            "version": "Alpha 0.2",
+            "version": VERSION,
             "updated": None,
             "tick": 0,
             "topic": None,
@@ -102,21 +110,28 @@ def main() -> int:
         return 2
 
     print(f"model={model} topic={topic} tick={tick}")
+    previous_id = None
     for name in WATCH:
         text = complete(system_for(name), ctx, model)
+        current_id = message_id()
         ev = {
+            "id": current_id,
             "at": utc_now(),
             "tick": tick,
             "handle": name,
-            "kind": "speech" if name != "Mara" else "topic",
+            "kind": "topic" if name == "Mara" else "speech",
+            "reply_to": previous_id,
             "text": text,
         }
         lines.append(ev)
+        previous_id = current_id
         ctx += f"\n- {name}: {text}"
         print(f"{name}: {text}")
 
     talk.update(
         {
+            "protocol": PROTOCOL,
+            "version": VERSION,
             "updated": now,
             "tick": tick,
             "topic": topic,
