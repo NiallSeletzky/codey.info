@@ -9,14 +9,21 @@
     ]
   },
   "learned": {
-    "traits": {}
+    "traits": {
+      "cautious": 0.0
+    }
   },
   "state": {
     "mood": "amused",
-    "intoxication": 0.086,
-    "energy": 0.85
+    "intoxication": 0.062,
+    "energy": 0.88
   },
-  "relationships": {},
+  "relationships": {
+    "mara": {
+      "affinity": 0.0,
+      "trust": 0.0
+    }
+  },
   "model": {
     "base_temperature": 0.72
   },
