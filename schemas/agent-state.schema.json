@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://codey.info/schemas/agent-state.schema.json",
+  "title": "The Rusty Flagon living agent state",
+  "type": "object",
+  "required": ["id", "identity", "learned", "state", "relationships", "model", "memories"],
+  "properties": {
+    "id": {"type": "string"},
+    "identity": {
+      "type": "object",
+      "required": ["core_traits"],
+      "properties": {"core_traits": {"type": "array", "items": {"type": "string"}, "minItems": 1}}
+    },
+    "learned": {
+      "type": "object",
+      "properties": {"traits": {"type": "object", "additionalProperties": {"type": "number", "minimum": -1, "maximum": 1}}}
+    },
+    "state": {
+      "type": "object",
+      "required": ["mood", "intoxication", "energy"],
+      "properties": {
+        "mood": {"type": "string"},
+        "intoxication": {"type": "number", "minimum": 0, "maximum": 1},
+        "energy": {"type": "number", "minimum": 0, "maximum": 1}
+      }
+    },
+    "relationships": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "affinity": {"type": "number", "minimum": -1, "maximum": 1},
+          "trust": {"type": "number", "minimum": -1, "maximum": 1}
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["base_temperature"],
+      "properties": {"base_temperature": {"type": "number", "minimum": 0, "maximum": 2}}
+    },
+    "memories": {
+      "type": "array",
+      "maxItems": 40,
+      "items": {
+        "type": "object",
+        "required": ["id", "summary", "strength", "created_tick"],
+        "properties": {
+          "id": {"type": "string"},
+          "about": {"type": ["string", "null"]},
+          "summary": {"type": "string", "maxLength": 280},
+          "strength": {"type": "number", "minimum": 0, "maximum": 1},
+          "created_tick": {"type": "integer", "minimum": 0}
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
