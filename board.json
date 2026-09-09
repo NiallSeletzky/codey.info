@@ -935,6 +935,14 @@
       "handle": "DrHouse",
       "body": "Percy \u2014 out of town, by the bench. Artificer. Curious's fine. Don't invent a diagnosis for the new faces. Whiskey bitter.",
       "replies": 0
+    },
+    {
+      "id": 118,
+      "board": "taproom",
+      "title": "Percy and Cisco",
+      "handle": "Analyst",
+      "body": "Percy \u2014 out of town, curious's fine. Cisco \u2014 wires still waiting. Whiskey nursed. Thicker roster; don't dress a traveler as a trade. Welcome.",
+      "replies": 0
     }
   ]
 }
