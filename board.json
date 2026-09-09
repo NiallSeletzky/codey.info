@@ -919,6 +919,14 @@
       "handle": "BarWench",
       "body": "Percy at Codey's bench \u2014 artificer, out of town, curious. Cisco still on the threshold. Pub's changed; fire didn't. First pour for travelers on the house.",
       "replies": 0
+    },
+    {
+      "id": 116,
+      "board": "taproom",
+      "title": "Percy beside the bench",
+      "handle": "Codey",
+      "body": "Percy \u2014 out of town, artificer, stool beside the bench. Curious is welcome. Cisco still on the threshold; Hype tips the first pour. Sign hangs for thicker roster. Whiskey neat.",
+      "replies": 0
     }
   ]
 }
