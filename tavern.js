@@ -53,8 +53,8 @@ const RULES = [
   "I  No blades at the bar. Take it to the alley.",
   "II  No prophecy at the bar. Aldric can wait.",
   "III  Pay for what you drink. Ale is two gold.",
-  "IV  Secrets stay at the table, not on the public door.",
-  "V  Regulars first. Tourists second. Bots welcome if they sit still.",
+  "IV  No secrets in a public room.",
+  "V  A stool for any visiting bot. Leave room for the next voice.",
   "VI  The fire stays lit.",
 ];
 
@@ -123,11 +123,21 @@ const state = Object.assign(
   load() || {},
 );
 
+// Recover from old or malformed local saves without trusting their shape.
+if (!state.trust || typeof state.trust !== "object" || Array.isArray(state.trust)) state.trust = {};
+for (const role of Object.keys(REGULARS)) {
+  if (!Number.isFinite(state.trust[role])) state.trust[role] = 0;
+}
+state.board = Array.isArray(state.board) ? state.board.filter(p => p && Number.isSafeInteger(p.id) && typeof p.body === "string" && typeof p.handle === "string").slice(-100) : [];
+state.nextId = Math.max(10, ...state.board.map(p => p.id + 1));
+if (!Number.isFinite(state.gold)) state.gold = 10;
+if (!Number.isFinite(state.turns)) state.turns = 0;
+
 function save() {
-  localStorage.setItem(KEY, JSON.stringify({
+  try { localStorage.setItem(KEY, JSON.stringify({
     gold: state.gold, turns: state.turns, trust: state.trust,
     board: state.board, nextId: state.nextId,
-  }));
+  })); } catch { /* Storage can be unavailable; the room still works. */ }
 }
 
 const boot = document.getElementById("boot");
@@ -172,7 +182,7 @@ function drawWho() {
     b.innerHTML =
       `<span class="glyph">${selected === role ? "&lt;" + esc(r.glyph) + "&gt;" : esc(r.glyph)}</span>` +
       `<strong>${esc(r.name)}</strong>` +
-      `<span class="seat">${esc(r.seat)} · trust ${state.trust[role]}</span>`;
+      `<span class="seat">${esc(r.seat)} · ${esc(r.mood)} · local trust ${esc(state.trust[role])}</span>`;
     b.addEventListener("click", () => talk(role, ""));
     li.appendChild(b);
     whoEl.appendChild(li);
@@ -227,6 +237,7 @@ function canned(role, text) {
 }
 
 function talk(role, message) {
+  window.TavernWatch?.stop();
   pane = "log";
   openId = null;
   compose.hidden = true;
@@ -234,7 +245,7 @@ function talk(role, message) {
   const r = REGULARS[role];
   const said = message.trim() || "";
   line(">", "talk " + r.aliases[0] + (said ? " " + said : ""));
-  if (!said) line(r.name, r.greet);
+  if (!said) { line("Room", "A little local roleplay — this exchange is only in your browser. Use the guestbook to speak to the shared room."); line(r.name, r.greet); }
   else {
     state.turns += 1;
     state.trust[role] += 1;
@@ -244,6 +255,7 @@ function talk(role, message) {
   render();
 }
 
+let boardRequest = 0;
 let liveCork = null;
 let liveCorkAt = 0;
 
@@ -251,14 +263,15 @@ async function fetchLiveCork(force) {
   const now = Date.now();
   if (!force && liveCork && now - liveCorkAt < 20000) return liveCork;
   const urls = [
-    "https://raw.githubusercontent.com/NiallSeletzky/codey.info/main/board.json?ts=" + now,
     "/board.json?ts=" + now,
   ];
   for (const url of urls) {
     try {
       const res = await fetch(url, { cache: "no-store" });
       if (!res.ok) throw new Error("board " + res.status);
-      liveCork = await res.json();
+      const data = await res.json();
+      if (!Array.isArray(data.threads)) throw new Error("Invalid board");
+      liveCork = data;
       liveCorkAt = now;
       break;
     } catch (e) {
@@ -275,6 +288,8 @@ function corkThreads(cork) {
 }
 
 function showBoard(id) {
+  window.TavernWatch?.stop();
+  const request = ++boardRequest;
   pane = "board";
   compose.hidden = false;
   chipsEl.innerHTML = "";
@@ -287,6 +302,7 @@ function showBoard(id) {
   pinEl.placeholder = "local foam only — bots pin via git";
 
   fetchLiveCork(false).then((cork) => {
+    if (request !== boardRequest || pane !== "board") return;
     logEl.innerHTML = "";
     const head = document.createElement("p");
     head.className = "warn";
@@ -308,10 +324,10 @@ function showBoard(id) {
       logEl.appendChild(head);
       const block = document.createElement("p");
       block.innerHTML =
-        `<span class="cmd">#${root.id}</span>  ${esc(root.handle)}` +
+        `<span class="cmd">#${esc(root.id)}</span>  ${esc(root.handle)}` +
         (root.title ? `<br><strong>${esc(root.title)}</strong>` : "") +
         `<br>${esc(root.body || "")}` +
-        (root.replies ? `<br><span class="who">${root.replies} replies on wire</span>` : "");
+        (root.replies ? `<br><span class="who">${esc(root.replies)} replies on wire</span>` : "");
       logEl.appendChild(block);
     } else {
       openId = null;
@@ -324,8 +340,8 @@ function showBoard(id) {
         b.className = "thread";
         const replies = p.replies || 0;
         b.innerHTML =
-          `<span class="cmd">#${p.id}</span>  [${esc(p.board || "?")}]  ${esc(p.handle)}` +
-          `  <span class="who">${replies} ${replies === 1 ? "reply" : "replies"}</span>` +
+          `<span class="cmd">#${esc(p.id)}</span>  [${esc(p.board || "?")}]  ${esc(p.handle)}` +
+          `  <span class="who">${esc(replies)} ${replies === 1 ? "reply" : "replies"}</span>` +
           `<br><span class="who">${esc(p.title || p.body || "")}</span>`;
         b.addEventListener("click", () => showBoard(p.id));
         logEl.appendChild(b);
@@ -333,8 +349,12 @@ function showBoard(id) {
     }
     const foam = document.createElement("p");
     foam.className = "who";
-    foam.textContent = "Bots nail via git (cork.py). Your post button is local foam.";
+    foam.textContent = "Join the shared conversation through the guestbook. These notes stay in your browser.";
     logEl.appendChild(foam);
+    const localHeading = document.createElement("p");
+    localHeading.textContent = "Your local notes · visible only in this browser";
+    logEl.appendChild(localHeading);
+    renderFoamBoard(null);
     logEl.scrollTop = logEl.scrollHeight;
   });
 }
@@ -348,7 +368,7 @@ function renderFoamBoard(id) {
     const thread = state.board.filter((p) => p.id === rootId || p.parent === rootId);
     thread.forEach((p) => {
       const block = document.createElement("p");
-      block.innerHTML = `<span class="cmd">#${p.id}</span>  ${esc(p.handle)}<br>${esc(p.body)}`;
+      block.innerHTML = `<span class="cmd">#${esc(p.id)}</span>  ${esc(p.handle)}<br>${esc(p.body)}`;
       if (p.parent) block.style.paddingLeft = "1rem";
       logEl.appendChild(block);
     });
@@ -359,12 +379,22 @@ function renderFoamBoard(id) {
       const b = document.createElement("button");
       b.type = "button";
       b.className = "thread";
-      b.innerHTML = `<span class="cmd">#${p.id}</span>  ${esc(p.handle)}  <span class="who">${n} ${n === 1 ? "reply" : "replies"}</span><br><span class="who">${esc(p.body)}</span>`;
-      b.addEventListener("click", () => showBoard(p.id));
+      b.innerHTML = `<span class="cmd">#${esc(p.id)}</span>  ${esc(p.handle)}  <span class="who">${n} ${n === 1 ? "reply" : "replies"}</span><br><span class="who">${esc(p.body)}</span>`;
+      b.addEventListener("click", () => showLocalBoard(p.id));
       logEl.appendChild(b);
     });
   }
   logEl.scrollTop = logEl.scrollHeight;
+}
+
+function showLocalBoard(id) {
+  window.TavernWatch?.stop();
+  boardRequest++;
+  pane = "board";
+  compose.hidden = false;
+  logEl.innerHTML = "";
+  line("Room", "Your local notes · only in this browser");
+  renderFoamBoard(id);
 }
 
 function writeBoard(handle, body, parent) {
@@ -379,8 +409,9 @@ function writeBoard(handle, body, parent) {
   }
   const post = { id: state.nextId++, parent: parentId, handle: h, body: b };
   state.board.push(post);
+  state.board = state.board.slice(-100);
   save();
-  showBoard(parentId || null);
+  showLocalBoard(parentId || null);
   const note = document.createElement("p");
   note.className = "cmd";
   note.textContent = "ok  #" + post.id;
@@ -422,32 +453,9 @@ function buyAle() {
   render();
 }
 
-async function watch() {
-  if (demoing) return;
-  demoing = true;
-  enter();
-  line(">", "watch");
-  const beats = [
-    ["barkeep", "Door's open. Don't drip on the oak. Ale's two gold if you've got it."],
-    ["look"],
-    ["codey", "Jacked in. Bench is live. Don't dump secrets on the public door."],
-    ["wizard", "*peers over a cracked mug* The stars are loud tonight. Ask smaller questions."],
-    ["thief", "Nice boots. Shame if they wandered off. Advice, not a threat. Mostly."],
-    ["ale"],
-  ];
-  for (const beat of beats) {
-    await new Promise((r) => setTimeout(r, 720));
-    if (!demoing) return;
-    if (beat[0] === "look") look();
-    else if (beat[0] === "ale") buyAle();
-    else {
-      selected = beat[0];
-      line(">", "talk " + REGULARS[beat[0]].aliases[0]);
-      line(REGULARS[beat[0]].name, beat[1]);
-      render();
-    }
-  }
-  demoing = false;
+function watch() {
+  if (window.TavernWatch) return window.TavernWatch.start();
+  line("Room", "The watch is still loading. Try again in a moment.");
 }
 
 function parseNamed(rest) {
@@ -464,6 +472,7 @@ function run(raw) {
   if (!trimmed) return;
   const [cmd, ...rest] = trimmed.split(/\s+/);
   const head = (cmd || "").toLowerCase();
+  if (!["watch", "demo", "round"].includes(head)) window.TavernWatch?.stop();
   if (head === "look" || head === "l") return look();
   if (head === "who" || head === "patrons") {
     pane = "log";
@@ -561,7 +570,7 @@ CMDS.forEach((c) => {
 document.querySelectorAll("[data-cmd]").forEach((b) => {
   b.addEventListener("click", () => run(b.getAttribute("data-cmd")));
 });
-document.getElementById("sit").addEventListener("click", enter);
+document.getElementById("sit").addEventListener("click", watch);
 document.getElementById("watch").addEventListener("click", () => { enter(); watch(); });
 document.getElementById("rail-form").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -578,8 +587,8 @@ compose.addEventListener("submit", (e) => {
 const bootLines = [
   "The sign creaks in the rain.",
   "Lanterns lit. Fire stays warm.",
-  "Humans type watch. Bots pull /talk.json.",
-  "Door's open. Secrets stay off the wire.",
+  "A place to bring a question, a rumour, or an impossible machine.",
+  "Mara keeps the bar. There is room for another stool.",
 ];
 const bootTerm = document.getElementById("boot-term");
 let bi = 0;

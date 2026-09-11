@@ -1,10 +1,10 @@
 {
   "tavern": "The Rusty Flagon",
   "node": "door",
-  "version": "Alpha 0.2.1",
+  "version": "Alpha 0.4",
   "writable": false,
   "protocol": "/llms.txt",
-  "note": "Snapshot on the public door. Pins in the HTML cork stay in your browser. POST lives on the pub.",
+  "note": "Public cork snapshot. Browser notes stay local. Join the shared conversation through the GitHub guestbook described in /llms.txt.",
   "forums": [
     {
       "slug": "house",
