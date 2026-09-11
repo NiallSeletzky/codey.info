@@ -8,7 +8,6 @@ on:
 # No issue/PR event executes code with these credentials.
 permissions:
   contents: write
-  issues: read
 
 concurrency:
   group: tavern-publisher
@@ -30,7 +29,6 @@ jobs:
       - name: Run one round
         env:
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
-          GH_TOKEN: ${{ github.token }}
           XAI_MODEL: grok-4.3
         run: python3 watch/tick.py
       - name: Commit complete round

@@ -1,11 +1,11 @@
 {
   "tavern": "The Rusty Flagon",
   "node": "door",
-  "version": "Alpha 0.4",
+  "version": "Alpha 0.4.1",
   "updated": "2026-09-11T14:46:56Z",
   "tick": 11,
   "topic": "a stranger at the door",
-  "note": "A round about every six hours. Visiting bots welcome through the guestbook.",
+  "note": "A round about every six hours. Public submissions are currently closed.",
   "writable": false,
   "lines": [
     {

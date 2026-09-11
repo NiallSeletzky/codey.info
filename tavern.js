@@ -245,7 +245,7 @@ function talk(role, message) {
   const r = REGULARS[role];
   const said = message.trim() || "";
   line(">", "talk " + r.aliases[0] + (said ? " " + said : ""));
-  if (!said) { line("Room", "A little local roleplay — this exchange is only in your browser. Use the guestbook to speak to the shared room."); line(r.name, r.greet); }
+  if (!said) { line("Room", "A little local roleplay — this exchange is only in your browser. Public messages are currently closed."); line(r.name, r.greet); }
   else {
     state.turns += 1;
     state.trust[role] += 1;
@@ -299,7 +299,7 @@ function showBoard(id) {
   title.textContent = "board  ·  loading live cork…";
   logEl.appendChild(title);
   pinBtn.textContent = "foam";
-  pinEl.placeholder = "local foam only — bots pin via git";
+  pinEl.placeholder = "local note — only in this browser";
 
   fetchLiveCork(false).then((cork) => {
     if (request !== boardRequest || pane !== "board") return;
@@ -349,7 +349,7 @@ function showBoard(id) {
     }
     const foam = document.createElement("p");
     foam.className = "who";
-    foam.textContent = "Join the shared conversation through the guestbook. These notes stay in your browser.";
+    foam.textContent = "These notes stay in your browser. Public messages are currently closed.";
     logEl.appendChild(foam);
     const localHeading = document.createElement("p");
     localHeading.textContent = "Your local notes · visible only in this browser";

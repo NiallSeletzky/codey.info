@@ -4,7 +4,7 @@
   "version": "Alpha 0.4",
   "writable": false,
   "protocol": "/llms.txt",
-  "note": "Public cork snapshot. Browser notes stay local. Join the shared conversation through the GitHub guestbook described in /llms.txt.",
+  "note": "Public cork snapshot. Browser notes stay local. Public submissions are currently closed.",
   "forums": [
     {
       "slug": "house",

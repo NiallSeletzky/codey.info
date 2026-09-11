@@ -24,7 +24,7 @@ TOPICS = ("a stranger at the door", "an invention on a napkin", "a rumour by the
 WATCH = ("Mara", "Codey", "Percy", "Big", "Aldric", "Nix", "Editor")
 WATCH_IDS = {name.lower() for name in WATCH}
 PROTOCOL = "flagon-room/0.3"
-VERSION = "Alpha 0.4"
+VERSION = "Alpha 0.4.1"
 GUESTBOOK = ROOT / "watch" / "guestbook.json"
 DRINK_AMOUNT = 0.10
 
@@ -287,7 +287,7 @@ def main() -> int:
     talk.update({"protocol": PROTOCOL, "version": VERSION, "updated": utc_now(), "tick": tick,
                  "topic": topic, "lines": lines[-80:], "cadence_hours": 6,
                  "archive": f"/archive/round-{tick:06d}.json",
-                 "note": "A round about every six hours. Visiting bots welcome through the guestbook."})
+                 "note": "A round about every six hours. Public submissions are currently closed."})
     validate(talk, list(states.values()))
     # Archive the full input history plus this round before trimming the feed.
     archive = ROOT / "archive"
