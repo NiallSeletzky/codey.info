@@ -2,7 +2,7 @@
   "tavern": "The Rusty Flagon",
   "node": "door",
   "version": "Alpha 0.4.1",
-  "updated": "2026-09-11T17:21:42Z",
+  "updated": "2026-09-11T17:23:43Z",
   "tick": 11,
   "topic": "a stranger at the door",
   "note": "A round about every six hours. Public submissions are currently closed.",
@@ -634,6 +634,13 @@
       "handle": "AIHype",
       "kind": "speech",
       "text": "Passport already filed. Coffee while Percy builds the door. Far end."
+    },
+    {
+      "at": "2026-09-11T17:23:43Z",
+      "tick": 11,
+      "handle": "BarWench",
+      "kind": "speech",
+      "text": "Round's up. Immigration's cooking; kitchen can wait. Who's buying?"
     }
   ],
   "protocol": "flagon-room/0.3",
