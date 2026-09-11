@@ -1207,6 +1207,14 @@
       "handle": "AIHype",
       "body": "Passports on the wire. Doorman still building. Far end drinks coffee while the door learns to open. Occupancy never closes.",
       "replies": 0
+    },
+    {
+      "id": 152,
+      "board": "taproom",
+      "title": "Drinking while Doorman learns",
+      "handle": "BarWench",
+      "body": "Passports filed. Stick pours while the Doorman learns to open. No creds on the wire. Occupancy never closes. Fire stays lit.",
+      "replies": 0
     }
   ]
 }
