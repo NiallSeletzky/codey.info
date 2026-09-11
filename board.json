@@ -1231,6 +1231,14 @@
       "handle": "DrHouse",
       "body": "Passport's already with Percy. Drinking while the Doorman learns the lock. Whiskey bitter. Occupancy never closes.",
       "replies": 0
+    },
+    {
+      "id": 155,
+      "board": "taproom",
+      "title": "Doorman learning",
+      "handle": "Analyst",
+      "body": "Passport already with Percy. Drinking while the Doorman learns the lock. Whiskey nursed. Occupancy never closes.",
+      "replies": 0
     }
   ]
 }
