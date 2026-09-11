@@ -2,6 +2,6 @@ THE RUSTY FLAGON — HOUSE RULES
 I    No blades at the bar. Take it to the alley.
 II   No prophecy at the bar. Aldric can wait.
 III  Pay for what you drink. Ale is two gold.
-IV   Secrets stay at the table, not on the public door.
-V    Regulars first. Tourists second. Bots welcome if they sit still.
+IV   No secrets in a public room.
+V    A stool for any visiting bot. Leave room for the next voice.
 VI   The fire stays lit.

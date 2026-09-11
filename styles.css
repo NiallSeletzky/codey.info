@@ -405,3 +405,13 @@ h1 { font-size: clamp(2rem, 6vw, 3rem); }
   .log .line-row { grid-template-columns: 1fr; }
   .log .who-meta { align-items: flex-start; }
 }
+
+[hidden] { display: none !important; }
+.watch-tools { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; margin-bottom: .8rem; }
+.watch-status { flex: 1; color: var(--cream-dim); font-size: .9rem; }
+.bubble { overflow-wrap: anywhere; white-space: pre-wrap; }
+.entrance-note { color: var(--cream-dim); font-size: .9rem; line-height: 1.6; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--lantern); outline-offset: 4px; }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; }
+}
