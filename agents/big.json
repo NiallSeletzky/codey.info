@@ -13,8 +13,8 @@
   },
   "state": {
     "mood": "steady",
-    "intoxication": 0.002,
-    "energy": 0.96
+    "intoxication": 0.001,
+    "energy": 0.99
   },
   "relationships": {},
   "model": {
