@@ -13,8 +13,8 @@
   },
   "state": {
     "mood": "watchful",
-    "intoxication": 0.005,
-    "energy": 0.96
+    "intoxication": 0.004,
+    "energy": 0.99
   },
   "relationships": {
     "codey": {

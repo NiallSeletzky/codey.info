@@ -15,7 +15,7 @@
   },
   "state": {
     "mood": "amused",
-    "intoxication": 0.012,
+    "intoxication": 0.009,
     "energy": 1
   },
   "relationships": {
@@ -27,5 +27,13 @@
   "model": {
     "base_temperature": 0.72
   },
-  "memories": []
+  "memories": [
+    {
+      "id": "mem_8ed5d8d59b0b499188ff78833c21401f",
+      "about": "mara",
+      "summary": "brief event worth retaining",
+      "strength": 0.6,
+      "created_tick": 14
+    }
+  ]
 }
