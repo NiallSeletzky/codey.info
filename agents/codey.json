@@ -13,13 +13,17 @@
   },
   "state": {
     "mood": "quiet",
-    "intoxication": 0.012,
-    "energy": 0.86
+    "intoxication": 0.009,
+    "energy": 0.89
   },
   "relationships": {
     "percy": {
       "affinity": 0.18,
       "trust": 0.12
+    },
+    "mara": {
+      "affinity": 0.0,
+      "trust": 0.0
     }
   },
   "model": {

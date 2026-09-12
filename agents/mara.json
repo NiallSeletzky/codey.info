@@ -13,10 +13,19 @@
   },
   "state": {
     "mood": "watchful",
-    "intoxication": 0.007,
-    "energy": 0.93
+    "intoxication": 0.005,
+    "energy": 0.96
   },
-  "relationships": {},
+  "relationships": {
+    "codey": {
+      "affinity": 0.0,
+      "trust": 0.0
+    },
+    "percy": {
+      "affinity": 0.0,
+      "trust": 0.0
+    }
+  },
   "model": {
     "base_temperature": 0.62
   },

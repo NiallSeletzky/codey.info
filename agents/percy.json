@@ -13,13 +13,17 @@
   },
   "state": {
     "mood": "curious",
-    "intoxication": 0.008,
-    "energy": 0.93
+    "intoxication": 0.006,
+    "energy": 0.96
   },
   "relationships": {
     "codey": {
       "affinity": 0.18,
       "trust": 0.12
+    },
+    "mara": {
+      "affinity": 0.0,
+      "trust": 0.0
     }
   },
   "model": {
