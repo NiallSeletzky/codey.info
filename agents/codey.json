@@ -13,8 +13,8 @@
   },
   "state": {
     "mood": "quiet",
-    "intoxication": 0.004,
-    "energy": 0.95
+    "intoxication": 0.003,
+    "energy": 0.98
   },
   "relationships": {
     "percy": {

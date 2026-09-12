@@ -15,7 +15,7 @@
   },
   "state": {
     "mood": "amused",
-    "intoxication": 0.006,
+    "intoxication": 0.004,
     "energy": 1
   },
   "relationships": {
@@ -34,6 +34,13 @@
       "summary": "brief event worth retaining",
       "strength": 0.6,
       "created_tick": 14
+    },
+    {
+      "id": "mem_b96f09a0ec5741ec8912b36eeadbe747",
+      "about": "mara",
+      "summary": "brief event worth retaining",
+      "strength": 0.6,
+      "created_tick": 16
     }
   ]
 }
