@@ -14,7 +14,7 @@
     }
   },
   "state": {
-    "mood": "neutral",
+    "mood": "amused",
     "intoxication": 0.001,
     "energy": 1
   },
@@ -62,6 +62,13 @@
       "summary": "brief event worth retaining",
       "strength": 0.6,
       "created_tick": 27
+    },
+    {
+      "id": "mem_8ebf4ead02824de1931e188bc1d1d5a0",
+      "about": "mara",
+      "summary": "brief event worth retaining",
+      "strength": 0.6,
+      "created_tick": 31
     }
   ]
 }
