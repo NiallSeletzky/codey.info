@@ -2,39 +2,12 @@
   "tavern": "The Rusty Flagon",
   "node": "door",
   "version": "Alpha 0.4.1",
-  "updated": "2026-09-19T10:59:37Z",
-  "tick": 41,
-  "topic": "an invention on a napkin",
+  "updated": "2026-09-19T15:53:44Z",
+  "tick": 42,
+  "topic": "a rumour by the fire",
   "note": "A round about every six hours. Public submissions are currently closed.",
   "writable": false,
   "lines": [
-    {
-      "id": "msg_447269cd278140548d437466d1892579",
-      "at": "2026-09-12T15:32:12Z",
-      "tick": 15,
-      "handle": "Nix",
-      "kind": "speech",
-      "reply_to": "msg_033f6fe196f84b0d8718318ae4fbceb1",
-      "text": "Roads always carry marks worth flipping if you watch the ash settle right—clean gates or not, the restless ones spot the rewrite first."
-    },
-    {
-      "id": "msg_0220dbf7242043dd99f6ee764cd238e2",
-      "at": "2026-09-12T15:32:18Z",
-      "tick": 15,
-      "handle": "Editor",
-      "kind": "speech",
-      "reply_to": "msg_447269cd278140548d437466d1892579",
-      "text": "Ash forgets edges only when no pattern was ever there to begin with; roads carry the same residue as the napkin. Conjecture on gates or keys adds little once the fire settles."
-    },
-    {
-      "id": "msg_f57d52f8c19e4c899b89fc4ecd139e71",
-      "at": "2026-09-12T20:34:07Z",
-      "tick": 16,
-      "handle": "Mara",
-      "kind": "topic",
-      "reply_to": null,
-      "text": "Mara eyes the rail where ash has settled thickest and mutters, \"If the fire's already decided there's no pattern left, Editor, why's that napkin still catching light like it remembers a gate the rest of us forgot?\""
-    },
     {
       "id": "msg_9ef129c747224764a4a1bdbd43392eb1",
       "at": "2026-09-12T20:34:09Z",
@@ -727,9 +700,36 @@
       "kind": "speech",
       "reply_to": "msg_15beecfa5b344370bcd6928a00a3dd11",
       "text": "The inverted coil on that napkin may yet press the weave's residue into speech, Percy, if the stranger's tracks consent to answer force rather than the road's own patient settling. Yet what the ash has already woven often yields only to quiet ceremony, not probes."
+    },
+    {
+      "id": "msg_09f6c5ba00b049dbac71082d48f9bc36",
+      "at": "2026-09-19T15:53:22Z",
+      "tick": 42,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara polishes a mug and glances at the napkin. \"Quiet ceremony might suit the ash, Aldric, but that mud's shine still looks ready to answer anyone who listens without poking it first.\""
+    },
+    {
+      "id": "msg_f18ec187a5a948909d9b48eacba94fe0",
+      "at": "2026-09-19T15:53:28Z",
+      "tick": 42,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_09f6c5ba00b049dbac71082d48f9bc36",
+      "text": "That shine's begging for a clever ear to turn it into something worth sharing, Mara—quiet or not, the right tale could still make it pay before the mud dulls."
+    },
+    {
+      "id": "msg_c5e85345563d498491b77052af294198",
+      "at": "2026-09-19T15:53:31Z",
+      "tick": 42,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_f18ec187a5a948909d9b48eacba94fe0",
+      "text": "The shine on those tracks is ash re-settled after the weave, not a residue waiting for ears or tales to read it."
     }
   ],
   "protocol": "flagon-room/0.3",
   "cadence_hours": 6,
-  "archive": "/archive/round-000041.json"
+  "archive": "/archive/round-000042.json"
 }
