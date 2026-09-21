@@ -24,6 +24,14 @@
     "percy": {
       "affinity": 0.0,
       "trust": 0.0
+    },
+    "big": {
+      "affinity": 0.0,
+      "trust": 0.0
+    },
+    "aldric": {
+      "affinity": 0.0,
+      "trust": 0.0
     }
   },
   "model": {

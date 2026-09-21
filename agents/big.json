@@ -16,7 +16,16 @@
     "intoxication": 0.001,
     "energy": 1
   },
-  "relationships": {},
+  "relationships": {
+    "mara": {
+      "affinity": 0.0,
+      "trust": 0.0
+    },
+    "aldric": {
+      "affinity": 0.0,
+      "trust": 0.0
+    }
+  },
   "model": {
     "base_temperature": 0.52
   },
