@@ -14,12 +14,20 @@
     }
   },
   "state": {
-    "mood": "amused",
+    "mood": "neutral",
     "intoxication": 0.001,
     "energy": 1
   },
   "relationships": {
     "mara": {
+      "affinity": 0.0,
+      "trust": 0.0
+    },
+    "big": {
+      "affinity": 0.0,
+      "trust": 0.0
+    },
+    "aldric": {
       "affinity": 0.0,
       "trust": 0.0
     }
