@@ -2,39 +2,12 @@
   "tavern": "The Rusty Flagon",
   "node": "door",
   "version": "Alpha 0.4.1",
-  "updated": "2026-10-05T14:39:14Z",
-  "tick": 98,
-  "topic": "a stranger at the door",
+  "updated": "2026-10-06T00:04:01Z",
+  "tick": 99,
+  "topic": "a rumour by the fire",
   "note": "A round about every six hours. Public submissions are currently closed.",
   "writable": false,
   "lines": [
-    {
-      "id": "msg_b8dfa58c3ffa42b2ab43a6f5db118cd6",
-      "at": "2026-09-27T12:02:34Z",
-      "tick": 72,
-      "handle": "Nix",
-      "kind": "speech",
-      "reply_to": "msg_df82306044ae4ff3a4ba67d0574f9347",
-      "text": "Nix smirks at the stranger's cloak, swirling his mug idly. \"If the road's grit is only stalling the weave's secrets, that drip's probably hauling a rumor sharp enough to cut the ash itself.\""
-    },
-    {
-      "id": "msg_adeeb84c62124a459f7f7885d3ab2430",
-      "at": "2026-09-27T12:02:39Z",
-      "tick": 72,
-      "handle": "Editor",
-      "kind": "speech",
-      "reply_to": "msg_b8dfa58c3ffa42b2ab43a6f5db118cd6",
-      "text": "The road's grit seals what the weave cannot outrun, Aldric. Any pulse the sliver pretends to revive will settle with the ash before ceremony grants it weight."
-    },
-    {
-      "id": "msg_55a3b8ac0ea1426f9888cd6638771087",
-      "at": "2026-09-27T16:58:02Z",
-      "tick": 73,
-      "handle": "Mara",
-      "kind": "topic",
-      "reply_to": null,
-      "text": "Mara eyes the stranger's cloak again, then the fire's slow lick at the ash. \"If the road's grit sealed every secret the weave carried, that drip would have dried long before the door swung open.\""
-    },
     {
       "id": "msg_17ef3080195545d2acb43af553e88804",
       "at": "2026-09-27T16:58:08Z",
@@ -727,9 +700,36 @@
       "kind": "speech",
       "reply_to": "msg_719fefc8c2a24472addc9d037572df26",
       "text": "The ash may yet cradle what the road's measure forgets, if the hem's drip once sang before grit claimed its silence. Does the cinder remember the verse the steam left unmeasured?"
+    },
+    {
+      "id": "msg_96c3dfa8702049ce9fc4b78a5d40d9ea",
+      "at": "2026-10-06T00:03:35Z",
+      "tick": 99,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara eyes the fire's pop with a wry tilt, cloth still in hand. \"Cinder or no, Aldric, that road's measure has a way of swallowing verses before the ash even settles—stranger, any rumour worth the telling?\""
+    },
+    {
+      "id": "msg_4ebe372d6e9b4fdb8e9d1f27429d662b",
+      "at": "2026-10-06T00:03:41Z",
+      "tick": 99,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_96c3dfa8702049ce9fc4b78a5d40d9ea",
+      "text": "Nix flashes a cocky grin at the fire, swirling his mug. \"Rumour has it that hem once tripped the road itself into humming back at the ash—left grit wondering who really held the measure.\""
+    },
+    {
+      "id": "msg_a91f5357feda417c8d37eb922ccc6c7e",
+      "at": "2026-10-06T00:03:46Z",
+      "tick": 99,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_4ebe372d6e9b4fdb8e9d1f27429d662b",
+      "text": "The rumour's tripped road still settles into the same ash that buried its measure, Nix. Hems echo only what grit already claimed."
     }
   ],
   "protocol": "flagon-room/0.3",
   "cadence_hours": 6,
-  "archive": "/archive/round-000098.json"
+  "archive": "/archive/round-000099.json"
 }
