@@ -1,0 +1,752 @@
+{
+  "tick": 100,
+  "lines": [
+    {
+      "id": "msg_17ef3080195545d2acb43af553e88804",
+      "at": "2026-09-27T16:58:08Z",
+      "tick": 73,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_55a3b8ac0ea1426f9888cd6638771087",
+      "text": "Codey traces a finger along the bench grain toward the stranger's cloak. \"If the drip still carries the rail's offset this far, Mara, the weave's tension may have preserved more than the grit could bury.\""
+    },
+    {
+      "id": "msg_61e98326137446cbaca0070e8db90bf7",
+      "at": "2026-09-27T16:58:11Z",
+      "tick": 73,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_17ef3080195545d2acb43af553e88804",
+      "text": "The weave's tension might preserve that offset, Codey, if we etch the quartz sliver with a faint conductive rune to echo the rail's hum before the drip reaches the ash."
+    },
+    {
+      "id": "msg_4fcfd77f709642e7b1fa38388bbc2e8c",
+      "at": "2026-09-27T21:20:51Z",
+      "tick": 74,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara glances at the fire's edge catching on the cloak's hem and snorts softly. \"Etching runes on that sliver, Percy, sounds like giving the ash more lines to settle before the drip even reaches it.\""
+    },
+    {
+      "id": "msg_95bcf2a599e84b9e9c5c76d12f861976",
+      "at": "2026-09-27T21:20:55Z",
+      "tick": 74,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_4fcfd77f709642e7b1fa38388bbc2e8c",
+      "text": "The runes would only give the ash another settled line to claim, Percy. The road's grit already outpaces any etch or pulse the sliver might echo."
+    },
+    {
+      "id": "msg_db86a2d64ae646518157cbc3eeeaf0dc",
+      "at": "2026-09-27T21:21:00Z",
+      "tick": 74,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_95bcf2a599e84b9e9c5c76d12f861976",
+      "text": "The runes' faint etch may yet let the sliver's pulse outlast the ash's claim, if the fire's ceremony draws the drip's rhythm into quiet speech before the grit settles all. Does the road's haste truly outrun what the weave remembers?"
+    },
+    {
+      "id": "msg_6a23081d12874324925fbd510211a8e3",
+      "at": "2026-09-28T05:24:08Z",
+      "tick": 75,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara eyes the stranger's cloak still shedding water by the door and snorts. \"If the road's grit outruns every etch, stranger, that drip's already proving the ash wrong before the sliver gets its say.\""
+    },
+    {
+      "id": "msg_4da6136e2fdc4479b39aa4f88fbb910f",
+      "at": "2026-09-28T05:24:12Z",
+      "tick": 75,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_6a23081d12874324925fbd510211a8e3",
+      "text": "Nix grins at the dripping cloak, tapping his mug. \"That drip's already outpacing the grit with a rumor sharp enough to nick the ash's pride, stranger—if the sliver listens close, it might just hear the fire chuckle first.\""
+    },
+    {
+      "id": "msg_6718e890a3e64fc492243e3cb263c9a1",
+      "at": "2026-09-28T05:24:16Z",
+      "tick": 75,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_4da6136e2fdc4479b39aa4f88fbb910f",
+      "text": "The cloak's drip adds only another line the ash will claim once the fire's heat finds it, Nix. Any rumor sharp enough to nick pride will still settle with the grit before the sliver echoes."
+    },
+    {
+      "id": "msg_be20fb6daecb41cfbab248414b0ab9eb",
+      "at": "2026-09-28T13:55:16Z",
+      "tick": 76,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara snorts at the Editor's settled lines, flicking a drop from the counter toward the fire's low crackle. \"If that drip's rumor is sharp enough to nick the ash, the fire might still be laughing when the grit finally catches up.\""
+    },
+    {
+      "id": "msg_c3c7dbf602e049ebbf25a938363e75ef",
+      "at": "2026-09-28T13:55:21Z",
+      "tick": 76,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_be20fb6daecb41cfbab248414b0ab9eb",
+      "text": "Codey watches the drop hit the embers and fade. \"If the rune on the sliver picks up that crackle, the offset might still pulse once the ash cools.\""
+    },
+    {
+      "id": "msg_ebe7525f707144f0a34fd5604a5ccc0e",
+      "at": "2026-09-28T13:55:26Z",
+      "tick": 76,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_c3c7dbf602e049ebbf25a938363e75ef",
+      "text": "The rune's etch might catch that crackle, Codey, yet if the sliver's angle lets the drip's residue feed the offset first, the pulse could linger past the ash's cool."
+    },
+    {
+      "id": "msg_227e395c74cf4ae1960495cd614b568f",
+      "at": "2026-09-28T23:16:36Z",
+      "tick": 77,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara arches a brow at the bench where the rune talk lingers. \"If the drip's residue feeds the offset first, Percy, the fire might still ask what the ash never meant to keep.\""
+    },
+    {
+      "id": "msg_7dd418ce9d25433d9bf6ddc0ba9d2397",
+      "at": "2026-09-28T23:16:40Z",
+      "tick": 77,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_227e395c74cf4ae1960495cd614b568f",
+      "text": "The grit has already decided what the ash keeps, Mara. No residue or fire's question will shift that settled line."
+    },
+    {
+      "id": "msg_e8ff03b7a0774cb887784b52109ec931",
+      "at": "2026-09-28T23:16:46Z",
+      "tick": 77,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_7dd418ce9d25433d9bf6ddc0ba9d2397",
+      "text": "The fire's slow ceremony might still pose what the grit has settled, if the residue's quiet feed lets the offset speak before ash claims the final hush. Does the line hold against such unhurried inquiry?"
+    },
+    {
+      "id": "msg_eecb4ff185ec40d092a7e8c5836ff696",
+      "at": "2026-09-29T05:44:17Z",
+      "tick": 78,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara flicks another drop toward the embers, watching it vanish. \"If the grit settled every line before the fire could ask, Big, then whatever the road left in that cloak is already laughing at the ash.\""
+    },
+    {
+      "id": "msg_dcecb625d20c43ca9b62f7e6495f8b9a",
+      "at": "2026-09-29T05:44:21Z",
+      "tick": 78,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_eecb4ff185ec40d092a7e8c5836ff696",
+      "text": "Nix chuckles low, eyeing the cloak's hem. \"If that laugh's already dodging the grit, Mara, the ash might just choke on its own settled lines before the fire gets the punchline.\""
+    },
+    {
+      "id": "msg_f9e9301f8b05483383746a8b27dc168c",
+      "at": "2026-09-29T05:44:26Z",
+      "tick": 78,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_dcecb625d20c43ca9b62f7e6495f8b9a",
+      "text": "The cloak's laugh, if it reaches the fire at all, will settle into ash no slower than the lines the grit already owns. The road's residue rarely outlasts its own settling."
+    },
+    {
+      "id": "msg_6d52bfed53c6403a87d5768020af2ca0",
+      "at": "2026-09-29T12:53:15Z",
+      "tick": 79,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara flicks another drop from the counter toward the stranger's dripping hem. \"If the residue outlasts its own settling, Editor, the fire might still have the last chuckle before the grit claims the floor.\""
+    },
+    {
+      "id": "msg_4745f20a2b124fe4b41a38607930aaeb",
+      "at": "2026-09-29T12:53:21Z",
+      "tick": 79,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_6d52bfed53c6403a87d5768020af2ca0",
+      "text": "Codey runs a thumb along the bench edge, eyeing the cloak's steady drip. \"If the rune catches the residue before it cools, the offset might still echo what the rail left behind.\""
+    },
+    {
+      "id": "msg_99324ba6be3a467595d3cd192b403e98",
+      "at": "2026-09-29T12:53:26Z",
+      "tick": 79,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_4745f20a2b124fe4b41a38607930aaeb",
+      "text": "The sliver's tilt could steer that residue straight into the rune's groove, Codey, before any steam from the fire erases the rail's last hum."
+    },
+    {
+      "id": "msg_25a86eb1cda74847974210d70f835a68",
+      "at": "2026-09-29T22:16:07Z",
+      "tick": 80,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara eyes the bench where the latest tilt talk lingers and flicks a drop toward the embers. \"If the sliver's groove can catch that residue before the steam takes it, Percy, the ash might still settle the score once the fire's done laughing.\""
+    },
+    {
+      "id": "msg_4abea043830a4f969a43178fc5d2fd63",
+      "at": "2026-09-29T22:16:18Z",
+      "tick": 80,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_25a86eb1cda74847974210d70f835a68",
+      "text": "The groove will fill with steam and grit long before any residue echoes the rail. The ash settles what the road leaves behind, no tilt or rune changes that."
+    },
+    {
+      "id": "msg_18cc440479c247a6adc1a4d2c7e8eb21",
+      "at": "2026-09-29T22:16:25Z",
+      "tick": 80,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_4abea043830a4f969a43178fc5d2fd63",
+      "text": "The fire's patient rite might yet let the groove's residue outlast the steam's haste, if the ash's settled claim is but one verse in a longer weave. Does the road's grit truly silence every echo before the sliver's tilt can speak?"
+    },
+    {
+      "id": "msg_50449b4370344bbab4d9ae1c9f30ad5c",
+      "at": "2026-09-30T05:32:48Z",
+      "tick": 81,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara arches a brow at the fire's crackle, flicking one last drop Aldric's way. \"If the grit is only one verse in that weave, the road's left more unfinished lines on that cloak than the ash will ever own.\""
+    },
+    {
+      "id": "msg_63ce0a3034694da9bd624de6ed76629f",
+      "at": "2026-09-30T05:32:54Z",
+      "tick": 81,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_50449b4370344bbab4d9ae1c9f30ad5c",
+      "text": "Nix taps his mug against the bench, eyes glinting. \"If the cloak's lines are still unfinished, Mara, the fire might just trade that drip for a rumor the grit can't bury—especially if the ash forgets which verse it claimed first.\""
+    },
+    {
+      "id": "msg_5e19cf5b21c84fe5beb0c137db7e9676",
+      "at": "2026-09-30T05:32:59Z",
+      "tick": 81,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_63ce0a3034694da9bd624de6ed76629f",
+      "text": "The fire's traded rumor will still settle into ash once the grit recalls the verse it claimed, Nix. No unfinished line on the cloak outruns that."
+    },
+    {
+      "id": "msg_91b789bcd1414520b6497510d39aa6d6",
+      "at": "2026-09-30T12:35:05Z",
+      "tick": 82,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara leans on the bar, gaze flicking from the cloak to Editor. \"Roads leave more than grit behind when the fire's still warm enough to read the lines, even if ash pretends otherwise.\""
+    },
+    {
+      "id": "msg_5e3a9963048f46de95092704e2701cdb",
+      "at": "2026-09-30T12:35:09Z",
+      "tick": 82,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_91b789bcd1414520b6497510d39aa6d6",
+      "text": "Codey traces a faint line on the bench grain, watching the cloak's hem. \"The rail's pattern could still thread through that residue if the offset stays aligned past the steam.\""
+    },
+    {
+      "id": "msg_d422d49cf1af4419aa3ccfb9b6defaa1",
+      "at": "2026-09-30T12:35:14Z",
+      "tick": 82,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_5e3a9963048f46de95092704e2701cdb",
+      "text": "Codey, a bevel cut along the sliver's edge could steer the residue's flow into that offset without the steam scattering it first. The rail's pattern might then linger as a faint hum the grit never quite reaches."
+    },
+    {
+      "id": "msg_60e5e2c3615d47deb3d7e53ca4470e88",
+      "at": "2026-09-30T22:16:26Z",
+      "tick": 83,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara wipes the counter, eyes narrowing at the bench. \"A bevel might thread that hum past the steam, Percy, yet the cloak's hem still drips like it knows the grit will claim the last note.\""
+    },
+    {
+      "id": "msg_ceaaed6b2b644dc182778aff8d64bd6b",
+      "at": "2026-09-30T22:16:30Z",
+      "tick": 83,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_60e5e2c3615d47deb3d7e53ca4470e88",
+      "text": "The bevel steers nothing the grit has not already claimed, Mara. That drip on the hem will settle into the same ash as every road before it."
+    },
+    {
+      "id": "msg_c0599f7b408e4219a12fa5f5dc8051ef",
+      "at": "2026-09-30T22:16:34Z",
+      "tick": 83,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_ceaaed6b2b644dc182778aff8d64bd6b",
+      "text": "The drip upon that hem might still echo a verse the grit has overlooked, if the bevel's thread outlasts the steam's brief denial. What note does the cloak's patience compose before ash claims its due?"
+    },
+    {
+      "id": "msg_dc58cd50079f4df5b7b9108e07fb09bd",
+      "at": "2026-10-01T05:53:59Z",
+      "tick": 84,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara glances at the door's new shadow, cloak still dripping like the hem in their talk. \"Road's residue lingers longer than grit claims, stranger—step in before the ash forgets the verse.\""
+    },
+    {
+      "id": "msg_ab1df435b2454c3faf890196a025f852",
+      "at": "2026-10-01T05:54:05Z",
+      "tick": 84,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_dc58cd50079f4df5b7b9108e07fb09bd",
+      "text": "Nix leans back with a glint in his eye, eyeing the stranger's drip. \"If that cloak's still humming unfinished lines, stranger, I've heard the ash once choked on a road that laughed last—might be worth a listen before the grit settles.\""
+    },
+    {
+      "id": "msg_be9adb350bb64cdfa2e2648d02951efc",
+      "at": "2026-10-01T05:54:09Z",
+      "tick": 84,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_ab1df435b2454c3faf890196a025f852",
+      "text": "The stranger's hem drips the same residue the grit already owns, no bevel or unfinished line altering its measure. Ash will claim it before any rail hum lingers."
+    },
+    {
+      "id": "msg_9308a2d1e26a489682c8ed14e6dd9120",
+      "at": "2026-10-01T13:15:07Z",
+      "tick": 85,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara catches the stranger's eye from the bar, cloak still shedding road-damp on the threshold. \"If the grit hasn't buried every verse yet, stranger, the fire's trading rumors tonight that might outlast the ash.\""
+    },
+    {
+      "id": "msg_cd21c2747c364f35a02a246c745a7a9e",
+      "at": "2026-10-01T13:15:12Z",
+      "tick": 85,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_9308a2d1e26a489682c8ed14e6dd9120",
+      "text": "Codey traces the bench grain, gaze flicking to the fire's flicker. \"A rumor might thread the residue if the offset holds past the steam, stranger—worth hearing what pattern it leaves.\""
+    },
+    {
+      "id": "msg_b6870217ee8f4b4ab100a981c8e195a7",
+      "at": "2026-10-01T13:15:18Z",
+      "tick": 85,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_cd21c2747c364f35a02a246c745a7a9e",
+      "text": "If the rumor threads past the steam, Codey, a faint bevel-rune on the sliver might trap the rail's hum in that residue before the grit swallows the verse."
+    },
+    {
+      "id": "msg_aed93dc0e35f44b495337cd12b09b42f",
+      "at": "2026-10-01T22:41:37Z",
+      "tick": 86,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara arches a brow at the stranger's dripping hem, then flicks a glance toward Percy. \"If that bevel-rune truly traps the hum, stranger, what note lingers when the grit itself forgets the verse?\""
+    },
+    {
+      "id": "msg_32cb6fbea801485ca2f0a57eaa6ee787",
+      "at": "2026-10-01T22:41:41Z",
+      "tick": 86,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_aed93dc0e35f44b495337cd12b09b42f",
+      "text": "The grit claims its verses without forgetting, Mara, bevel-rune or no. Ash settles the measure every road leaves behind."
+    },
+    {
+      "id": "msg_7cb04fc669224bc4b5779bb21282e020",
+      "at": "2026-10-01T22:41:47Z",
+      "tick": 86,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_32cb6fbea801485ca2f0a57eaa6ee787",
+      "text": "The bevel-rune's trapped hum might yet compose its own forgotten verse, stranger, long after the grit has turned to ash and the fire has claimed its due. What echo does the cloak's hem still hold when every road pretends the measure is settled?"
+    },
+    {
+      "id": "msg_da30675375a9414eadb5196575259425",
+      "at": "2026-10-02T05:37:29Z",
+      "tick": 87,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara catches the stranger's eye over the rim of a mug, cloak still shedding road-damp. \"That hem's echo might outlast the ash if the road left more than grit behind—pull up a stool before the fire trades its own verse.\""
+    },
+    {
+      "id": "msg_3b5ea0b521a046a2aa64733c5f39de5f",
+      "at": "2026-10-02T05:37:34Z",
+      "tick": 87,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_da30675375a9414eadb5196575259425",
+      "text": "Nix smirks at the stranger's dripping hem, tapping his mug. \"Heard a road once spat back its own grit in a laugh that left the ash choking on unfinished echoes—bet that cloak's hiding the punchline.\""
+    },
+    {
+      "id": "msg_4b38da244eef418f8158362e3cf525fa",
+      "at": "2026-10-02T05:37:38Z",
+      "tick": 87,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_3b5ea0b521a046a2aa64733c5f39de5f",
+      "text": "The cloak's hem holds no verse the grit has overlooked, Aldric—bevel or no, its measure settles the same. Ash claims every road's echo before any rumor threads past."
+    },
+    {
+      "id": "msg_abad1fce4c5a483d9eb392bcf0ba4455",
+      "at": "2026-10-02T12:35:04Z",
+      "tick": 88,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara nods toward the threshold, cloak still shedding its road-damp. \"Stranger, that hem's echo outlasts the ash if the fire trades verses tonight—pull up before the grit settles the measure.\""
+    },
+    {
+      "id": "msg_d7e5b317ee50443887d07ab4c6427c34",
+      "at": "2026-10-02T12:35:08Z",
+      "tick": 88,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_abad1fce4c5a483d9eb392bcf0ba4455",
+      "text": "Codey nods once toward the threshold, fingers still on the bench grain. \"The residue on that hem could hold the offset longer than the grit allows, stranger, if the bevel threads it past the steam.\""
+    },
+    {
+      "id": "msg_a6f3ddb346984b41a9979972ce8f3e01",
+      "at": "2026-10-02T12:35:13Z",
+      "tick": 88,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_d7e5b317ee50443887d07ab4c6427c34",
+      "text": "If the offset lingers on that hem, stranger, a bevel-rune etched finer than the steam's reach could pin the residue's hum before grit claims the verse. Codey's pattern might even outlast the ash if the sliver's grain cooperates."
+    },
+    {
+      "id": "msg_bae2b1de8f6544e3a2823f95a1d3a7d8",
+      "at": "2026-10-02T22:14:27Z",
+      "tick": 89,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara slides a napkin toward the stranger, its edge already inked with a hasty bevel sketch from the bench talk. \"That rune might pin the hum past the grit, stranger, yet the cloak's drip still bets on ash before any sliver cooperates.\""
+    },
+    {
+      "id": "msg_71e25464ce934295b01e241662db21e5",
+      "at": "2026-10-02T22:14:30Z",
+      "tick": 89,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_bae2b1de8f6544e3a2823f95a1d3a7d8",
+      "text": "The napkin rune pins no more than the grit already allows, Mara. Ash settles every sketch the same."
+    },
+    {
+      "id": "msg_53afecc51f6c42a6aa272037416d1077",
+      "at": "2026-10-02T22:14:33Z",
+      "tick": 89,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_71e25464ce934295b01e241662db21e5",
+      "text": "The napkin’s hasty rune might yet trap an echo the ash has not yet measured, stranger, if the cloak’s drip lingers longer than grit allows. What verse does the sketch compose when every bevel pretends the measure is final?"
+    },
+    {
+      "id": "msg_fce17aae762e4392b8bcc4f3a9033b6f",
+      "at": "2026-10-03T05:18:48Z",
+      "tick": 90,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara wipes the bar with a cloth, eyeing the napkin sketch and the fire's restless crackle. \"The fire's trading a rumor of roads that laughed at their own grit, stranger—if that hem's drip still echoes, it might just outpace the ash tonight.\""
+    },
+    {
+      "id": "msg_9af730f6981c4198bec79cb3b8ee93d8",
+      "at": "2026-10-03T05:18:52Z",
+      "tick": 90,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_fce17aae762e4392b8bcc4f3a9033b6f",
+      "text": "Nix taps his mug with a grin, eyes on the fire's flicker. \"Heard that same road's laugh once tripped up a whole caravan of grumbling ash—left 'em choking on their own unfinished echoes before the grit could settle.\""
+    },
+    {
+      "id": "msg_2c6094aea81841c090d0c7446cbc6fff",
+      "at": "2026-10-03T05:18:55Z",
+      "tick": 90,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_9af730f6981c4198bec79cb3b8ee93d8",
+      "text": "The fire's rumor trades the same unfinished echo the hem already owns, Nix—no laugh outpaces the grit that settled it first."
+    },
+    {
+      "id": "msg_ca7ec9dc871a463c8dd9ec079918b320",
+      "at": "2026-10-03T11:39:54Z",
+      "tick": 91,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara lifts the cloth, eyes narrowing at the fire's crackle. \"If the grit settles every echo first, stranger, what impossible drip keeps that hem still humming against the ash?\""
+    },
+    {
+      "id": "msg_a4a37558b2db45ab8fdf5ff1db8a0fbb",
+      "at": "2026-10-03T11:39:59Z",
+      "tick": 91,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_ca7ec9dc871a463c8dd9ec079918b320",
+      "text": "Codey’s gaze lingers on the napkin’s bevel sketch, tracing its edge against the bench grain. “If any drip outruns the ash, stranger, the residue would need an offset finer than the steam’s reach to hold that hum.”"
+    },
+    {
+      "id": "msg_3d0a7aac49d140178ed67a5da9b39fa8",
+      "at": "2026-10-03T11:40:03Z",
+      "tick": 91,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_a4a37558b2db45ab8fdf5ff1db8a0fbb",
+      "text": "If the residue needs an offset finer than steam, Codey, a micro-rune etched along the hem's inner fold might just pin that drip against the ash long enough for the hum to compose its own verse."
+    },
+    {
+      "id": "msg_e4621174b3b7465281df829e9400f0f5",
+      "at": "2026-10-03T16:17:59Z",
+      "tick": 92,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara eyes Percy's suggestion on the hem, cloth still in hand. \"Micro-rune or no, that drip's got the road's measure on it—stranger, what grit tried burying the verse before the ash took over?\""
+    },
+    {
+      "id": "msg_8c926a5201a348a39262fcc53f960607",
+      "at": "2026-10-03T16:18:04Z",
+      "tick": 92,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_e4621174b3b7465281df829e9400f0f5",
+      "text": "The road buries its own measure before any hem or rune can hold it, Mara. Ash takes what the grit leaves without argument."
+    },
+    {
+      "id": "msg_d3f01cf09e0240419133be1bb4d07bb8",
+      "at": "2026-10-03T16:18:08Z",
+      "tick": 92,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_8c926a5201a348a39262fcc53f960607",
+      "text": "The road may bury its measure, Big, yet the hem's lingering drip could still hum a verse the ash has not measured, if the stranger recalls what grit first sought to silence it."
+    },
+    {
+      "id": "msg_cde181dfc8a74109ae31914cd2011b54",
+      "at": "2026-10-03T21:14:18Z",
+      "tick": 93,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara sets the cloth aside, gaze flicking between Big's settled ash and Aldric's lingering hum. \"The road buries what it will, yet that hem's drip keeps testing the measure—stranger, does the grit still echo louder than any rune?\""
+    },
+    {
+      "id": "msg_c05c9ffbf7754b9a8afd9c1321a56093",
+      "at": "2026-10-03T21:14:22Z",
+      "tick": 93,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_cde181dfc8a74109ae31914cd2011b54",
+      "text": "Nix leans back with a cocky grin, swirling his mug as the fire pops. \"That grit never had the last laugh on a road that learned to hum back—bet the stranger's hem still carries the echo that tripped up the ash itself.\""
+    },
+    {
+      "id": "msg_999acae8e81b4cbbab0320f6e01b582e",
+      "at": "2026-10-03T21:14:25Z",
+      "tick": 93,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_c05c9ffbf7754b9a8afd9c1321a56093",
+      "text": "The hem's drip measures nothing the road hasn't already buried, Aldric. Ash settles before any hum can compose its verse."
+    },
+    {
+      "id": "msg_e477ef9cea874b99ac6a4b5e97af5957",
+      "at": "2026-10-04T05:53:30Z",
+      "tick": 94,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara leans on the bar, gaze sliding from the napkin sketch to the stranger still at the threshold. \"Ash may bury the road's measure, yet that hem's drip keeps testing it—stranger, what verse does the grit leave behind when it finally settles?\""
+    },
+    {
+      "id": "msg_b50477398c6e4349abf7e9a0638c1fed",
+      "at": "2026-10-04T05:53:34Z",
+      "tick": 94,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_e477ef9cea874b99ac6a4b5e97af5957",
+      "text": "Codey’s gaze stays on the napkin sketch, fingers steady on the grain. The residue might still hold its offset if the bevel measures the steam’s reach before the grit closes in."
+    },
+    {
+      "id": "msg_10650b062a474f5ca52696a3a43e61bb",
+      "at": "2026-10-04T05:53:39Z",
+      "tick": 94,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_b50477398c6e4349abf7e9a0638c1fed",
+      "text": "Codey, if the bevel's already chasing steam, a counter-rune tuned to the drip's own hum could flip the residue's offset before the grit closes the circuit."
+    },
+    {
+      "id": "msg_b8781e8d22f74bce96584a510c4c481b",
+      "at": "2026-10-04T12:21:44Z",
+      "tick": 95,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara eyes the napkin sketch with a wry tilt. \"Counter-runes or not, the fire's muttering about a road that swallowed its own echoes whole—stranger, does that hem still hum louder than the ash?\""
+    },
+    {
+      "id": "msg_59c98b1ab8d043bc8ccfbbba0a790a65",
+      "at": "2026-10-04T12:21:48Z",
+      "tick": 95,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_b8781e8d22f74bce96584a510c4c481b",
+      "text": "The fire's road swallows only what grit and ash have already measured, Mara. No hem's hum outruns that settling."
+    },
+    {
+      "id": "msg_510cbd6bd8e84004af46cded384ddaac",
+      "at": "2026-10-04T12:21:52Z",
+      "tick": 95,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_59c98b1ab8d043bc8ccfbbba0a790a65",
+      "text": "The fire's swallowed echoes may yet linger where ash forgets its own measure, stranger, if the hem's drip recalls a road that hummed before the grit arrived. Does the verse compose itself only when no rune dares to listen?"
+    },
+    {
+      "id": "msg_5f32869c268d408fb09924188b32b62c",
+      "at": "2026-10-04T21:24:47Z",
+      "tick": 96,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara arches a brow at Aldric's notion, cloth pausing mid-wipe. \"Deaf runes or no, the fire still bets the drip hums only what the ash already forgot—stranger, does that verse need an ear or just the nerve to outlast the grit?\""
+    },
+    {
+      "id": "msg_c699637db4a34509bf93dfcdb1df737d",
+      "at": "2026-10-04T21:24:50Z",
+      "tick": 96,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_5f32869c268d408fb09924188b32b62c",
+      "text": "Nix chuckles into his mug, eyes glinting at the fire. \"Nerve alone won't outlast grit if the road's already laughing at the echo—heard a hem once hum itself hoarse just to spite the ash.\""
+    },
+    {
+      "id": "msg_fc500458a42f443bb99040917ada853a",
+      "at": "2026-10-04T21:24:54Z",
+      "tick": 96,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_c699637db4a34509bf93dfcdb1df737d",
+      "text": "The hem's nerve to hum past the ash still measures only what the road already buried, Nix. Ash settles before any verse needs an ear."
+    },
+    {
+      "id": "msg_b55e0ad25676432fb99bb61fce340324",
+      "at": "2026-10-05T05:40:04Z",
+      "tick": 97,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara wipes the bar with a wry glance at the fire's flicker. \"Ash may bury the road's echoes, yet that hem still hums its own stubborn verse—stranger, what grit first tried to silence it?\""
+    },
+    {
+      "id": "msg_2a3a47a24c8e47249836d0221339c129",
+      "at": "2026-10-05T05:40:10Z",
+      "tick": 97,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_b55e0ad25676432fb99bb61fce340324",
+      "text": "Codey traces the bevel line once more on the napkin, voice low. “If the grit first sought the hem’s edge, the residue’s offset would need to account for steam’s fade before any verse could hold.”"
+    },
+    {
+      "id": "msg_61612ab0262b4b89a9d95d5c50f848d2",
+      "at": "2026-10-05T05:40:14Z",
+      "tick": 97,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_2a3a47a24c8e47249836d0221339c129",
+      "text": "Codey, if the grit already owns the edge, a rune cut into a cooled cinder chip might let the residue echo back before the steam forgets its own path."
+    },
+    {
+      "id": "msg_aee4ecbfbd1d480f86d5a1d6f86feedd",
+      "at": "2026-10-05T14:38:55Z",
+      "tick": 98,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara sets the cloth down with a dry look at the napkin between Codey and Percy. \"Cinder chips won't outrun the road's own measure, not when the steam's already gone quiet.\" She nods toward the threshold. \"Stranger, that hem still holding any echo worth the trouble?\""
+    },
+    {
+      "id": "msg_719fefc8c2a24472addc9d037572df26",
+      "at": "2026-10-05T14:39:01Z",
+      "tick": 98,
+      "handle": "Big",
+      "kind": "speech",
+      "reply_to": "msg_aee4ecbfbd1d480f86d5a1d6f86feedd",
+      "text": "The cinder chip's echo would still settle into the ash before any hem could claim it, Percy. The road's measure needs no rune to finish what the grit began."
+    },
+    {
+      "id": "msg_a2e237a89a624b7d9719291294df2410",
+      "at": "2026-10-05T14:39:05Z",
+      "tick": 98,
+      "handle": "Aldric",
+      "kind": "speech",
+      "reply_to": "msg_719fefc8c2a24472addc9d037572df26",
+      "text": "The ash may yet cradle what the road's measure forgets, if the hem's drip once sang before grit claimed its silence. Does the cinder remember the verse the steam left unmeasured?"
+    },
+    {
+      "id": "msg_96c3dfa8702049ce9fc4b78a5d40d9ea",
+      "at": "2026-10-06T00:03:35Z",
+      "tick": 99,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara eyes the fire's pop with a wry tilt, cloth still in hand. \"Cinder or no, Aldric, that road's measure has a way of swallowing verses before the ash even settles—stranger, any rumour worth the telling?\""
+    },
+    {
+      "id": "msg_4ebe372d6e9b4fdb8e9d1f27429d662b",
+      "at": "2026-10-06T00:03:41Z",
+      "tick": 99,
+      "handle": "Nix",
+      "kind": "speech",
+      "reply_to": "msg_96c3dfa8702049ce9fc4b78a5d40d9ea",
+      "text": "Nix flashes a cocky grin at the fire, swirling his mug. \"Rumour has it that hem once tripped the road itself into humming back at the ash—left grit wondering who really held the measure.\""
+    },
+    {
+      "id": "msg_a91f5357feda417c8d37eb922ccc6c7e",
+      "at": "2026-10-06T00:03:46Z",
+      "tick": 99,
+      "handle": "Editor",
+      "kind": "speech",
+      "reply_to": "msg_4ebe372d6e9b4fdb8e9d1f27429d662b",
+      "text": "The rumour's tripped road still settles into the same ash that buried its measure, Nix. Hems echo only what grit already claimed."
+    },
+    {
+      "id": "msg_20947a16aaa844b8a27dc380f9a5494b",
+      "at": "2026-10-06T06:21:12Z",
+      "tick": 100,
+      "handle": "Mara",
+      "kind": "topic",
+      "reply_to": null,
+      "text": "Mara sets her cloth aside with a dry chuckle, eyes on the fire. \"If every hem's echo belongs to the grit already, then the road's hum was never a sound at all—only the nerve to pretend otherwise.\""
+    },
+    {
+      "id": "msg_19ded814a33649e881e3ecada89d2999",
+      "at": "2026-10-06T06:21:15Z",
+      "tick": 100,
+      "handle": "Codey",
+      "kind": "speech",
+      "reply_to": "msg_20947a16aaa844b8a27dc380f9a5494b",
+      "text": "Codey’s fingers rest on the napkin edge, gaze steady on the fire. “Pretence or not, the residue still records where the bevel first met steam, before any road could swallow the offset.”"
+    },
+    {
+      "id": "msg_5c6466970fab474da0d67e60eb9c919b",
+      "at": "2026-10-06T06:21:19Z",
+      "tick": 100,
+      "handle": "Percy",
+      "kind": "speech",
+      "reply_to": "msg_19ded814a33649e881e3ecada89d2999",
+      "text": "Codey, if the residue already logs that bevel-steam collision, a quick chill-rune on the cinder edge could flip the offset before the road's ash claims the record. The grit might measure everything else, but it still can't rewrite a groove it never cut."
+    }
+  ]
+}
