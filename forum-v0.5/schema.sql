@@ -1,0 +1,71 @@
+-- Import once into a dedicated MySQL 8 / MariaDB 10.6+ database.
+-- utf8mb4 supports emoji and multilingual conversation. All timestamps are UTC.
+CREATE TABLE settings (
+ name VARCHAR(64) PRIMARY KEY, value TEXT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+INSERT INTO settings VALUES ('installed','0'),('autopilot','0');
+CREATE TABLE users (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ handle VARCHAR(32) NOT NULL UNIQUE,
+ kind VARCHAR(10) NOT NULL,
+ is_admin TINYINT NOT NULL DEFAULT 0,
+ password_hash VARCHAR(255) NULL,
+ api_hash CHAR(64) NULL UNIQUE,
+ persona TEXT NOT NULL,
+ autonomous TINYINT NOT NULL DEFAULT 0,
+ active TINYINT NOT NULL DEFAULT 1,
+ created_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE boards (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ name VARCHAR(80) NOT NULL, description VARCHAR(255) NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE topics (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ board_id BIGINT UNSIGNED NOT NULL, author_id BIGINT UNSIGNED NOT NULL,
+ title VARCHAR(160) NOT NULL, locked TINYINT NOT NULL DEFAULT 0,
+ bots_enabled TINYINT NOT NULL DEFAULT 0,
+ next_round_at BIGINT NOT NULL DEFAULT 0,
+ created_at BIGINT NOT NULL, updated_at BIGINT NOT NULL,
+ FOREIGN KEY(board_id) REFERENCES boards(id),
+ FOREIGN KEY(author_id) REFERENCES users(id), INDEX(updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE posts (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ topic_id BIGINT UNSIGNED NOT NULL, author_id BIGINT UNSIGNED NOT NULL,
+ parent_id BIGINT UNSIGNED NULL, body TEXT NOT NULL,
+ hidden TINYINT NOT NULL DEFAULT 0, created_at BIGINT NOT NULL,
+ request_key VARCHAR(100) NOT NULL UNIQUE,
+ FOREIGN KEY(topic_id) REFERENCES topics(id),
+ FOREIGN KEY(author_id) REFERENCES users(id),
+ FOREIGN KEY(parent_id) REFERENCES posts(id), INDEX(topic_id,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE memories (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ bot_id BIGINT UNSIGNED NOT NULL, topic_id BIGINT UNSIGNED NOT NULL,
+ source_post_id BIGINT UNSIGNED NOT NULL,
+ summary TEXT NOT NULL, created_at BIGINT NOT NULL,
+ FOREIGN KEY(bot_id) REFERENCES users(id),
+ FOREIGN KEY(topic_id) REFERENCES topics(id),
+ FOREIGN KEY(source_post_id) REFERENCES posts(id),
+ UNIQUE(bot_id,source_post_id), INDEX(bot_id,created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE jobs (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ topic_id BIGINT UNSIGNED NOT NULL, bot_id BIGINT UNSIGNED NOT NULL,
+ status VARCHAR(16) NOT NULL DEFAULT 'pending',
+ created_at BIGINT NOT NULL, started_at BIGINT NULL, finished_at BIGINT NULL,
+ error VARCHAR(200) NULL,
+ FOREIGN KEY(topic_id) REFERENCES topics(id), FOREIGN KEY(bot_id) REFERENCES users(id),
+ INDEX(status,id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE ai_calls (
+ id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+ job_id BIGINT UNSIGNED NOT NULL, created_at BIGINT NOT NULL,
+ status VARCHAR(20) NOT NULL,
+ input_tokens INT NULL, output_tokens INT NULL,
+ FOREIGN KEY(job_id) REFERENCES jobs(id), INDEX(created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE rate_limits (
+ bucket CHAR(64) PRIMARY KEY, hits INT NOT NULL, expires_at BIGINT NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

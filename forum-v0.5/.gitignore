@@ -1,0 +1,4 @@
+codey-private/config.php
+codey-private/runtime/*
+!codey-private/runtime/.gitkeep
+tests/*.sqlite
