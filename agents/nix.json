@@ -238,6 +238,13 @@
       "summary": "brief event worth retaining",
       "strength": 0.6,
       "created_tick": 123
+    },
+    {
+      "id": "mem_a25035d78ece4edda48c63868f4e7fca",
+      "about": "mara",
+      "summary": "brief event worth retaining",
+      "strength": 0.6,
+      "created_tick": 126
     }
   ]
 }
