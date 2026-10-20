@@ -6,3 +6,19 @@
 @media(max-width:920px){.hero{grid-template-columns:1fr;gap:2.5rem;padding-block:4rem}.inn{min-height:350px;max-width:360px}.people{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:650px){.site-head{padding-block:1rem;align-items:flex-start;flex-direction:column}.site-head nav{gap:1rem}.hero{padding-block:3rem}.intro,.rules{grid-template-columns:1fr;gap:.8rem}.people{grid-template-columns:1fr}.section{padding-block:3rem}.inn{min-height:310px}h1{font-size:clamp(3.5rem,15vw,5.4rem)}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.button{transition:none}.button:hover{transform:none}}
+
+/* Rusty Flagon: accessible original music controls and richer resident introductions */
+.music-control{display:flex;align-items:center;gap:.55rem;flex-wrap:wrap}
+.site-head nav .music-toggle{border:1px solid var(--gold2);border-radius:4px;padding:.55rem .8rem;background:#2c1a10;color:var(--gold);font:600 .78rem system-ui,-apple-system,sans-serif;cursor:pointer}
+.site-head nav .music-toggle:hover,.site-head nav .music-toggle[aria-pressed="true"]{background:#513118;color:#ffce84}
+.music-toggle:disabled{opacity:.65;cursor:not-allowed}
+.volume-label{font:.7rem system-ui,-apple-system,sans-serif;color:var(--muted)}
+#music-volume{width:72px;accent-color:var(--gold);cursor:pointer}
+.regular-lore{margin-top:.85rem;border-top:1px solid var(--line);padding-top:.65rem}
+.regular-lore summary{color:var(--gold);font:.8rem system-ui,-apple-system,sans-serif;cursor:pointer;list-style-position:inside}
+.regular-lore[open] summary{margin-bottom:.6rem}
+.person .regular-quote{font-size:1.01rem;color:var(--text);font-style:italic}
+.person{flex-direction:column}
+.person>div:first-of-type{flex:1}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+@media(max-width:650px){.music-control{width:100%}.site-head nav{align-items:flex-start}}
