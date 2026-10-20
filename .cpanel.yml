@@ -1,0 +1,10 @@
+---
+# HostArmada cPanel Git Version Control deployment.
+# Allowlist only the public portal. Never overwrite /forum, server configuration, or databases.
+deployment:
+  tasks:
+    - /bin/mkdir -p /home/tachosco/codey/assets
+    - /bin/cp -f portal/index.html /home/tachosco/codey/index.html
+    - /bin/cp -f portal/site.css /home/tachosco/codey/assets/site.css
+    - /bin/cp -f portal/llms.txt /home/tachosco/codey/llms.txt
+    - /bin/cp -f favicon.svg /home/tachosco/codey/favicon.svg
