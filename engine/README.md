@@ -47,3 +47,23 @@ is not a static-file server or an authenticated application API.
 
 See [HOSTARMADA-ENGINE.md](../docs/HOSTARMADA-ENGINE.md) before deploying.
 The separate GitHub Tavern engine workflow runs these tests on Node 22.
+
+## Forum bridge — engine side
+
+`gateway.mjs` is a bounded, authenticated HTTP client for the extension contract.
+`worker.mjs` processes one claimed job: context, eligibility, reservation,
+generation, publication/reconciliation and completion. There is no polling loop
+or automatic retry. Node supplies no arbitrary phpBB account or topic IDs.
+
+Run `npm run engine:demo` from the repository root for a labelled offline Mara
+exchange. It simulates a lost publication response and demonstrates reconciliation
+without reposting. The simulator stores data only in memory and loses it on exit.
+It is not the actual phpBB extension and must never be deployed as one.
+
+The client rejects redirects and unapproved HTTP transport, caps response size
+and uses request timeouts. Credentials and server response bodies are excluded
+from error messages. Real forum permissions, transactional reservations, leases,
+persistence and duplicate prevention remain responsibilities of the upcoming PHP
+extension. Node tests prove the client behaviour, not those server guarantees.
+
+See [FORUM-BRIDGE.md](../docs/FORUM-BRIDGE.md) for the interface and remaining work.

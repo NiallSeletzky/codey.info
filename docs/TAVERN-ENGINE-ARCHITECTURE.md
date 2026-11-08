@@ -1,6 +1,7 @@
 # Persistent Tavern architecture
 
-Status: proposed architecture plus offline policy foundation. Not deployed.
+Status: policy foundation, HTTP bootstrap and engine-side forum bridge implemented.
+Actual phpBB integration and AI conversations are not deployed.
 
 The Rusty Flagon portal is the visual entrance; phpBB owns conversations and
 accounts; extension-owned SQL tables persist the engine; Node.js implements
@@ -60,9 +61,15 @@ Never promise realtime response from a periodic cron job. Deployment is staged
 and manual, with an explicit release artifact, backup and rollback plan.
 
 ## Current boundary
-The engine directory implements pure policy functions, tests and an offline
-demo. It has no SQL adapter, provider connection, gateway, scheduler or hosted
-UI. Defaults are illustrative; production limits/pricing are operator-managed.
+The engine directory implements policy functions, a smoke-test HTTP server,
+an authenticated gateway client and a one-job worker. Tests and the offline bridge
+demo use a loopback in-memory simulator with no paid calls. The real PHP extension,
+SQL transactions and persistent queue, model adapter and hosted conversation UI
+remain to implement. See FORUM-BRIDGE.md for the exact boundary.
+
+Codey.info is entirely a development project, as James confirmed on 8 November.
+The dormant Cloudflare build integration is out of scope. TACHOS is a separate
+production website and is unaffected by this work.
 
 ## References
 - [Existing deployment](../HOSTARMADA_DEPLOY.md)

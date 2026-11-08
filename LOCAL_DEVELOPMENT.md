@@ -6,6 +6,7 @@ Use Node.js 22 (`nvm use` if nvm is installed) and Python 3. The root package ha
 - `npm run check`: validate the public preview assets.
 - `npm run engine:start`: start the existing Node.js engine.
 - `npm run engine:test`: run the engine tests.
+- `npm run engine:demo`: run the offline forum-bridge simulation (no paid calls).
 - `npm run build`: package the historical root static site using the existing packaging script; preserve or move an existing dist/ first.
 
 The preview serves an isolated copy of portal/, binds only to loopback, and needs restarting after edits. See HOSTARMADA_DEPLOY.md for current deployment instructions. phpBB is an independently managed PHP application and is not provided by the preview.

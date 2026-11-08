@@ -8,7 +8,8 @@
     "engine:start": "npm --prefix engine start",
     "engine:test": "npm --prefix engine test",
     "test": "npm --prefix engine test",
-    "build": "python3 scripts/package_site.py"
+    "build": "python3 scripts/package_site.py",
+    "engine:demo": "npm --prefix engine run bridge:demo"
   },
   "engines": {
     "node": ">=22 <25"
