@@ -1,0 +1,23 @@
+name: Tavern engine
+on:
+  pull_request:
+  push:
+    paths:
+      - 'engine/**'
+      - 'package.json'
+      - '.nvmrc'
+      - '.github/workflows/engine.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  engine:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test bootstrap and offline character policies
+        run: npm run engine:test
