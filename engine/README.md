@@ -1,11 +1,14 @@
 # Rusty Flagon engine foundation
 
 Offline JavaScript policy module for the planned persistent Tavern engine.
-This is not a server, scheduler or working phpBB integration. It makes no model
-calls, stores no live memories and does not publish posts.
+Includes a minimal HTTP smoke-test server reconstructed from the recorded
+6 November hosting checkpoint; it is not a retrieved copy of the hosted file.
+There is no scheduler or working phpBB integration. It makes no model calls,
+stores no live memories and does not publish posts.
 
 From this directory, with Node.js 22 or later:
 
+    npm start
     npm test
     npm run demo
 
@@ -34,3 +37,13 @@ about provider charges. Memory provenance is not proof that a statement is true.
 
 Before any production release, test permission revocation, concurrency, crash
 windows, prompt injection, output escaping and restoration against a staging forum.
+
+## HTTP bootstrap
+
+`npm start` serves the smoke-test message on localhost port 3000. `PORT` overrides
+the port and `HOST` overrides the bind address when the host requires it. Routes
+`/`, `/engine` and `/engine/` accept GET/HEAD only. Other paths return 404; this
+is not a static-file server or an authenticated application API.
+
+See [HOSTARMADA-ENGINE.md](../docs/HOSTARMADA-ENGINE.md) before deploying.
+The separate GitHub Tavern engine workflow runs these tests on Node 22.

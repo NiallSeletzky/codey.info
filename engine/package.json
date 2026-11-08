@@ -1,1 +1,14 @@
-{"name":"rusty-flagon-engine","version":"0.1.0","private":true,"type":"module","scripts":{"test":"node --test","demo":"node demo.mjs"},"engines":{"node":">=22"}}
+{
+  "name": "rusty-flagon-engine",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test",
+    "demo": "node demo.mjs",
+    "start": "node app.cjs"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
