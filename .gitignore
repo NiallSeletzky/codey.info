@@ -20,3 +20,5 @@ venv/
 *.swp
 
 dist/
+engine/data/
+
