@@ -184,15 +184,27 @@ export function normalizeTurnOutput(raw, validPostIds) {
   return { reply, mood, memory, traitDeltas, traitReason, relationshipUpdates };
 }
 
+function clipWords(text, maxLen) {
+  const cleaned = String(text || '')
+    .replace(/["“”]+/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (cleaned.length <= maxLen) return cleaned;
+  const slice = cleaned.slice(0, maxLen);
+  const lastSpace = slice.lastIndexOf(' ');
+  const trimmed = (lastSpace > maxLen * 0.55 ? slice.slice(0, lastSpace) : slice).replace(/[,;:\-–—']+$/, '');
+  return `${trimmed}…`;
+}
+
 // Deterministic offline mock provider so the Tavern works with zero API cost.
 function generateMockTurn({ character, thread, posts, memories }) {
   const latest = posts[posts.length - 1];
   const latestText = latest?.body || thread.title;
-  const snippet = latestText.replace(/\s+/g, ' ').trim().slice(0, 90);
+  const snippet = clipWords(latestText, 85);
   const addressedName = latest && latest.authorId !== character.id ? latest.authorName : 'friends';
   const recallHint =
     memories.length > 0
-      ? ` Still keeping in mind what I noted earlier (${memories[0].text.slice(0, 70)}).`
+      ? ` Still keeping in mind what I noted earlier (${clipWords(memories[0].text, 68)}).`
       : '';
 
   const lower = latestText.toLowerCase();

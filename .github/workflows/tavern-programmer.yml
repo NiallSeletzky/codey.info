@@ -1,0 +1,31 @@
+name: Tavern Programming Proposal Agent
+
+on:
+  schedule:
+    - cron: '30 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  propose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify repository test health
+        run: |
+          npm run engine:test
+          npm run check
+      - name: Generate and publish Programming Agent implementation brief
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          REVIEW_SITE_URL: ${{ vars.REVIEW_SITE_URL || 'https://codey.info' }}
+          REVIEW_TAVERN_URL: ${{ vars.TAVERN_URL || 'https://codey.info/engine' }}
+        run: node engine/agents/programmer.mjs --publish-github

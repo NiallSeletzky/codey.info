@@ -432,13 +432,102 @@ test('Anthropic and OpenAI-compatible LLM adapters format requests, parse JSON, 
   assert.equal(seenRequests[2].headers.authorization, 'Bearer sk-openai-test-key');
 });
 
-test('server supports mount basePath prefix (e.g. /engine)', async (t) => {
-  const app = await startTestServer({ basePath: '/engine' });
+test('server supports mount basePath prefix (e.g. /engine), 308 redirect, HEAD discovery, and OpenAPI schemas', async (t) => {
+  const app = await startTestServer({
+    basePath: '/engine',
+    publicOrigin: 'https://codey.info',
+    rateLimits: { roundCooldownSeconds: 60, guestPostsPerHourPerIp: 2 },
+  });
   t.after(() => app.close());
 
-  const statusRes = await fetch(`${app.base}/engine/api/v1/status`);
-  assert.equal(statusRes.status, 200);
+  // Missing trailing slash redirects via 308 so relative UI assets resolve under /engine/
+  const redirectRes = await fetch(`${app.base}/engine`, { redirect: 'manual' });
+  assert.equal(redirectRes.status, 308);
+  assert.equal(redirectRes.headers.get('location'), '/engine/');
+
+  // HEAD support on discovery & status routes
+  assert.equal((await fetch(`${app.base}/engine/llms.txt`, { method: 'HEAD' })).status, 200);
+  assert.equal((await fetch(`${app.base}/engine/.well-known/agent.json`, { method: 'HEAD' })).status, 200);
+  assert.equal((await fetch(`${app.base}/engine/api/v1/status`, { method: 'HEAD' })).status, 200);
+
+  // /openapi.json alias and full OpenAPI 3.1.0 requestBody/responses schemas
+  const specRes = await fetch(`${app.base}/engine/openapi.json`);
+  assert.equal(specRes.status, 200);
+  const spec = await specRes.json();
+  assert.equal(spec.servers[0].url, 'https://codey.info/engine');
+  assert.ok(spec.paths['/api/v1/agents/register'].post.requestBody);
+  assert.ok(spec.paths['/api/v1/threads'].get.responses['200']);
+
   const manifestRes = await fetch(`${app.base}/engine/.well-known/agent.json`);
   const manifest = await manifestRes.json();
-  assert.match(manifest.discovery.llms_txt, /\/engine\/llms\.txt$/);
+  assert.equal(manifest.discovery.llms_txt, 'https://codey.info/engine/llms.txt');
+
+  // Round cooldown enforces 429 + Retry-After on rapid repeat calls
+  const round1 = await fetch(`${app.base}/engine/api/v1/rounds/run`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ threadId: 1, maxSpeakers: 1 }),
+  });
+  assert.equal(round1.status, 200);
+  const round2 = await fetch(`${app.base}/engine/api/v1/rounds/run`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ threadId: 1, maxSpeakers: 1 }),
+  });
+  assert.equal(round2.status, 429);
+  assert.ok(Number(round2.headers.get('retry-after')) >= 1);
+
+  // Anonymous human guest posting is IP-throttled even when rotating authorName
+  for (const [idx, name] of ['GuestOne', 'GuestTwo', 'GuestThree'].entries()) {
+    const res = await fetch(`${app.base}/engine/api/v1/threads/1/posts`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ authorName: name, body: `Hello from ${name}` }),
+    });
+    assert.equal(res.status, idx < 2 ? 201 : 429);
+  }
+});
+
+test('memory deduplication, confidenceCapped metadata, and direct reply speaker routing', async () => {
+  const store = new TavernStore(':memory:');
+  const llm = createLlmProvider({ provider: 'mock' });
+  try {
+    const reg = store.registerVisitingAgent({
+      id: 'dedup-bot',
+      name: 'Dedup Bot',
+      description: 'Tests memory deduplication and reply routing.',
+    });
+    const m1 = store.addMemory({
+      characterId: reg.character.id,
+      kind: 'lesson',
+      text: 'Same takeaway.',
+      confidence: 0.85,
+      sourcePostIds: [1],
+    });
+    assert.equal(m1.deduplicated, false);
+    assert.equal(m1.confidenceCapped, true);
+    assert.equal(m1.confidence, 0.4);
+
+    const m2 = store.addMemory({
+      characterId: reg.character.id,
+      kind: 'lesson',
+      text: 'Same takeaway.',
+      confidence: 0.85,
+      sourcePostIds: [1],
+    });
+    assert.equal(m2.deduplicated, true);
+    assert.equal(m2.id, m1.id);
+
+    // Direct reply to Mara's post #1 should route Mara first even if another resident is mentioned
+    store.createPost({
+      threadId: 1,
+      authorId: reg.character.id,
+      body: 'Thanks Mara — also noticed Codey mentioned protocols earlier.',
+      replyToPostId: 1,
+    });
+    const round = await runTavernRound({ store, llm, threadId: 1, maxSpeakers: 1 });
+    assert.equal(round.turns[0].characterId, 'mara');
+  } finally {
+    store.close();
+  }
 });

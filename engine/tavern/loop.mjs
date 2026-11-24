@@ -6,7 +6,14 @@
 
 import { TavernStoreError } from './store.mjs';
 
-function pickSpeakers({ residents, posts, requestedIds, maxSpeakers }) {
+const BOARD_HOSTS = Object.freeze({
+  taproom: 'mara',
+  hearth: 'aldric',
+  workshop: 'codey',
+  noticeboard: 'percy',
+});
+
+function pickSpeakers({ residents, posts, boardSlug, requestedIds, maxSpeakers }) {
   const active = residents.filter((r) => !r.paused);
   if (active.length === 0) return [];
 
@@ -20,9 +27,16 @@ function pickSpeakers({ residents, posts, requestedIds, maxSpeakers }) {
   const latestPost = posts[posts.length - 1];
   const latestText = (latestPost?.body || '').toLowerCase();
   const lastAuthorId = latestPost?.authorId;
+  const repliedPost = latestPost?.replyToPostId
+    ? posts.find((p) => p.id === latestPost.replyToPostId)
+    : null;
+  const directReplyTargetId = repliedPost?.authorId || null;
+  const boardHostId = BOARD_HOSTS[boardSlug] || null;
 
-  // Prefer residents who weren't the very last speaker, prioritizing anyone
-  // mentioned by name in the latest post, then those who have spoken least recently.
+  // Prefer residents who weren't the very last speaker, prioritizing:
+  // 1) the resident whose post was directly replied to (replyToPostId),
+  // 2) residents mentioned by name in the latest post,
+  // 3) the board's host resident, then those who have spoken least recently.
   const recentOrder = new Map();
   posts.forEach((p, idx) => recentOrder.set(p.authorId, idx));
 
@@ -30,9 +44,15 @@ function pickSpeakers({ residents, posts, requestedIds, maxSpeakers }) {
   const pool = candidates.length > 0 ? candidates : active;
 
   pool.sort((a, b) => {
+    const aDirect = a.id === directReplyTargetId ? 1 : 0;
+    const bDirect = b.id === directReplyTargetId ? 1 : 0;
+    if (aDirect !== bDirect) return bDirect - aDirect;
     const aMentioned = latestText.includes(a.name.toLowerCase()) ? 1 : 0;
     const bMentioned = latestText.includes(b.name.toLowerCase()) ? 1 : 0;
     if (aMentioned !== bMentioned) return bMentioned - aMentioned;
+    const aHost = a.id === boardHostId ? 1 : 0;
+    const bHost = b.id === boardHostId ? 1 : 0;
+    if (aHost !== bHost) return bHost - aHost;
     const aIdx = recentOrder.has(a.id) ? recentOrder.get(a.id) : -1;
     const bIdx = recentOrder.has(b.id) ? recentOrder.get(b.id) : -1;
     if (aIdx !== bIdx) return aIdx - bIdx;
@@ -86,6 +106,7 @@ export async function runTavernRound({
   const speakers = pickSpeakers({
     residents,
     posts: thread.posts,
+    boardSlug: thread.boardSlug,
     requestedIds: characterIds,
     maxSpeakers: safeMaxSpeakers,
   });

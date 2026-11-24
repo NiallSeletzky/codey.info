@@ -69,10 +69,29 @@ function extractBearerToken(req) {
   return auth.slice(7).trim();
 }
 
-function resolveOrigin(req, basePath = '') {
-  const host = req.headers.host || '127.0.0.1:4180';
-  const proto = req.headers['x-forwarded-proto'] === 'https' ? 'https' : 'http';
+function resolveClientIp(req) {
+  const xff = req.headers['x-forwarded-for'];
+  if (typeof xff === 'string' && xff.trim()) {
+    return xff.split(',')[0].trim();
+  }
+  const realIp = req.headers['x-real-ip'];
+  if (typeof realIp === 'string' && realIp.trim()) {
+    return realIp.trim();
+  }
+  return req.socket?.remoteAddress || 'unknown';
+}
+
+function resolveOrigin(req, basePath = '', publicOrigin = '') {
   const cleanPrefix = basePath.replace(/\/+$/, '');
+  if (publicOrigin) {
+    return `${publicOrigin.replace(/\/+$/, '')}${cleanPrefix}`;
+  }
+  const host = req.headers.host || '127.0.0.1:4180';
+  const forwardedProto = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    .trim()
+    .toLowerCase();
+  const proto = forwardedProto === 'https' ? 'https' : 'http';
   return `${proto}://${host}${cleanPrefix}`;
 }
 
@@ -80,6 +99,8 @@ export function createTavernServer({
   store,
   llm,
   basePath = '',
+  publicOrigin = process.env.TAVERN_PUBLIC_ORIGIN || '',
+  adminToken = process.env.TAVERN_ADMIN_TOKEN || '',
   rateLimits = {},
 } = {}) {
   const tavernStore = store || new TavernStore(path.join(__dirname, '..', 'data', 'tavern.db'));
@@ -88,11 +109,22 @@ export function createTavernServer({
   const limits = {
     postsPerHour: Number(rateLimits.postsPerHour ?? 30),
     postsPerDay: Number(rateLimits.postsPerDay ?? 120),
+    guestPostsPerHourPerIp: Number(rateLimits.guestPostsPerHourPerIp ?? 20),
     registrationsPerHourPerIp: Number(rateLimits.registrationsPerHourPerIp ?? 20),
+    roundCooldownSeconds: Number(
+      rateLimits.roundCooldownSeconds ?? process.env.TAVERN_ROUND_COOLDOWN_SECONDS ?? 0
+    ),
+    maxRoundsPerDay: Number(
+      rateLimits.maxRoundsPerDay ?? process.env.TAVERN_MAX_ROUNDS_PER_DAY ?? 200
+    ),
   };
 
-  // In-memory sliding window for per-IP open self-registration throttling.
+  // Sliding windows for per-IP registration, guest posting, and round budget caps.
   const regWindow = new Map();
+  const guestPostWindow = new Map();
+  const roundTimestamps = [];
+  const roundByIp = new Map();
+
   function checkRegistrationLimit(ip) {
     const now = Date.now();
     const hourAgo = now - 3600_000;
@@ -106,6 +138,54 @@ export function createTavernServer({
     }
     list.push(now);
     regWindow.set(ip, list);
+  }
+
+  function checkGuestIpLimit(ip) {
+    const now = Date.now();
+    const hourAgo = now - 3600_000;
+    const list = (guestPostWindow.get(ip) || []).filter((ts) => ts >= hourAgo);
+    if (list.length >= limits.guestPostsPerHourPerIp) {
+      throw new TavernStoreError(
+        'rate_limited',
+        'Guest posting rate limit reached for this address; register an AI key or try later',
+        429
+      );
+    }
+    list.push(now);
+    guestPostWindow.set(ip, list);
+  }
+
+  function checkRoundBudget(ip) {
+    const now = Date.now();
+    const dayAgo = now - 86400_000;
+    while (roundTimestamps.length > 0 && roundTimestamps[0] < dayAgo) {
+      roundTimestamps.shift();
+    }
+    if (roundTimestamps.length >= limits.maxRoundsPerDay) {
+      const err = new TavernStoreError(
+        'round_budget_exceeded',
+        'Daily Tavern round cap reached; try again tomorrow',
+        429
+      );
+      err.retryAfter = 3600;
+      throw err;
+    }
+    if (limits.roundCooldownSeconds > 0) {
+      const last = roundByIp.get(ip) || 0;
+      const elapsedSec = (now - last) / 1000;
+      if (elapsedSec < limits.roundCooldownSeconds) {
+        const waitSec = Math.ceil(limits.roundCooldownSeconds - elapsedSec);
+        const err = new TavernStoreError(
+          'round_cooldown',
+          `Please wait ${waitSec}s before triggering another Tavern round`,
+          429
+        );
+        err.retryAfter = waitSec;
+        throw err;
+      }
+      roundByIp.set(ip, now);
+    }
+    roundTimestamps.push(now);
   }
 
   function checkPostingLimit(characterId) {
@@ -140,10 +220,10 @@ export function createTavernServer({
       if (!auth) {
         throw new TavernStoreError('unauthorized', 'Invalid or revoked API key', 401);
       }
-      return auth.character;
+      return { character: auth.character, isGuest: false };
     }
     if (typeof body.authorName === 'string' && body.authorName.trim()) {
-      return tavernStore.ensureHumanCharacter(body.authorName);
+      return { character: tavernStore.ensureHumanCharacter(body.authorName), isGuest: true };
     }
     throw new TavernStoreError(
       'unauthorized',
@@ -162,11 +242,22 @@ export function createTavernServer({
   const server = http.createServer(async (req, res) => {
     try {
       const parsedUrl = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
-      let pathname = parsedUrl.pathname;
+      const rawPathname = parsedUrl.pathname;
+      const method = req.method || 'GET';
+
+      // Redirect /engine (missing trailing slash) -> /engine/ so relative UI links resolve properly.
+      if (normalizedBasePath && rawPathname === normalizedBasePath && (method === 'GET' || method === 'HEAD')) {
+        res.writeHead(308, {
+          Location: `${normalizedBasePath}/${parsedUrl.search}`,
+          'Cache-Control': 'no-store',
+        });
+        return res.end();
+      }
+
+      let pathname = rawPathname;
       if (normalizedBasePath && pathname.startsWith(normalizedBasePath)) {
         pathname = pathname.slice(normalizedBasePath.length) || '/';
       }
-      const method = req.method || 'GET';
 
       if (method === 'OPTIONS') {
         res.writeHead(204, {
@@ -195,26 +286,65 @@ export function createTavernServer({
         return res.end(method === 'HEAD' ? undefined : content);
       }
 
-      // ---- Machine-readable AI Discovery ----
-      const origin = resolveOrigin(req, normalizedBasePath);
-      if (method === 'GET' && pathname === '/llms.txt') {
-        return sendText(res, 200, renderLlmsTxt(origin, tavernStore.getStats()));
+      // ---- Machine-readable AI Discovery (supports GET & HEAD) ----
+      const origin = resolveOrigin(req, normalizedBasePath, publicOrigin);
+      if ((method === 'GET' || method === 'HEAD') && pathname === '/llms.txt') {
+        const text = renderLlmsTxt(origin, tavernStore.getStats());
+        if (method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          });
+          return res.end();
+        }
+        return sendText(res, 200, text);
       }
-      if (method === 'GET' && pathname === '/.well-known/agent.json') {
-        return sendJson(res, 200, renderAgentManifest(origin, llmProvider.info, limits));
+      if ((method === 'GET' || method === 'HEAD') && pathname === '/.well-known/agent.json') {
+        const payload = renderAgentManifest(origin, llmProvider.info, limits);
+        if (method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          });
+          return res.end();
+        }
+        return sendJson(res, 200, payload);
       }
-      if (method === 'GET' && pathname === '/api/v1/openapi.json') {
-        return sendJson(res, 200, renderOpenApiSpec(origin));
+      if (
+        (method === 'GET' || method === 'HEAD') &&
+        (pathname === '/api/v1/openapi.json' || pathname === '/openapi.json')
+      ) {
+        const spec = renderOpenApiSpec(origin);
+        if (method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          });
+          return res.end();
+        }
+        return sendJson(res, 200, spec);
       }
-      if (method === 'GET' && pathname === '/api/v1/status') {
-        return sendJson(res, 200, {
+      if ((method === 'GET' || method === 'HEAD') && pathname === '/api/v1/status') {
+        const payload = {
           status: 'ok',
           name: 'The Rusty Flagon',
           provider: llmProvider.info,
           admission: 'open-self-registration',
           rateLimits: limits,
           stats: tavernStore.getStats(),
-        });
+        };
+        if (method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          });
+          return res.end();
+        }
+        return sendJson(res, 200, payload);
       }
 
       // ---- Boards, Threads & Posts ----
@@ -229,7 +359,8 @@ export function createTavernServer({
       }
       if (method === 'POST' && pathname === '/api/v1/threads') {
         const body = await readJsonBody(req);
-        const author = resolvePostAuthor(req, body);
+        const { character: author, isGuest } = resolvePostAuthor(req, body);
+        if (isGuest) checkGuestIpLimit(resolveClientIp(req));
         checkPostingLimit(author.id);
         const created = tavernStore.createThread({
           boardSlug: body.boardSlug,
@@ -253,7 +384,8 @@ export function createTavernServer({
       const threadPostsMatch = pathname.match(/^\/api\/v1\/threads\/(\d+)\/posts$/);
       if (method === 'POST' && threadPostsMatch) {
         const body = await readJsonBody(req);
-        const author = resolvePostAuthor(req, body);
+        const { character: author, isGuest } = resolvePostAuthor(req, body);
+        if (isGuest) checkGuestIpLimit(resolveClientIp(req));
         checkPostingLimit(author.id);
         const post = tavernStore.createPost({
           threadId: Number(threadPostsMatch[1]),
@@ -280,8 +412,7 @@ export function createTavernServer({
 
       // ---- Open Self-Registration & Agent Identity ----
       if (method === 'POST' && pathname === '/api/v1/agents/register') {
-        const ip = req.socket?.remoteAddress || 'unknown';
-        checkRegistrationLimit(ip);
+        checkRegistrationLimit(resolveClientIp(req));
         const body = await readJsonBody(req);
         const registered = tavernStore.registerVisitingAgent(body);
         return sendJson(res, 201, {
@@ -319,7 +450,7 @@ export function createTavernServer({
       if (method === 'POST' && pathname === '/api/v1/characters/me/memories') {
         const { character } = requireAgentAuth(req);
         const body = await readJsonBody(req);
-        const memory = tavernStore.addMemory({
+        const stored = tavernStore.addMemory({
           characterId: character.id,
           kind: body.kind,
           text: body.text,
@@ -327,7 +458,8 @@ export function createTavernServer({
           sourcePostIds: body.sourcePostIds,
           supersedesMemoryId: body.supersedesMemoryId ?? null,
         });
-        return sendJson(res, 201, { memory });
+        const { deduplicated, confidenceCapped, ...memory } = stored;
+        return sendJson(res, 201, { memory, deduplicated, confidenceCapped });
       }
 
       if (method === 'POST' && pathname === '/api/v1/characters/me/evolve') {
@@ -369,14 +501,17 @@ export function createTavernServer({
 
       // ---- Trigger Resident Tavern Round ----
       if (method === 'POST' && pathname === '/api/v1/rounds/run') {
+        checkRoundBudget(resolveClientIp(req));
         const body = await readJsonBody(req);
+        const token = extractBearerToken(req);
+        const isAdmin = Boolean(adminToken && token && token === adminToken);
         const result = await runTavernRound({
           store: tavernStore,
           llm: llmProvider,
           threadId: body.threadId ?? null,
           characterIds: Array.isArray(body.characterIds) ? body.characterIds : null,
           maxSpeakers: body.maxSpeakers ?? 2,
-          allowOverrideChain: Boolean(body.allowOverrideChain),
+          allowOverrideChain: Boolean(body.allowOverrideChain) && isAdmin,
         });
         return sendJson(res, 200, result);
       }
@@ -386,9 +521,13 @@ export function createTavernServer({
       });
     } catch (error) {
       if (error instanceof TavernStoreError) {
-        return sendJson(res, error.status, {
-          error: { code: error.code, message: error.message },
-        });
+        const extraHeaders = error.retryAfter ? { 'Retry-After': String(error.retryAfter) } : {};
+        return sendJson(
+          res,
+          error.status,
+          { error: { code: error.code, message: error.message } },
+          extraHeaders
+        );
       }
       if (error instanceof LlmProviderError) {
         return sendJson(res, 502, {

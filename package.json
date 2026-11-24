@@ -12,7 +12,11 @@
     "engine:demo": "npm --prefix engine run bridge:demo",
     "tavern:start": "npm --prefix engine run tavern:start",
     "tavern:tick": "npm --prefix engine run tavern:tick",
-    "tavern:bot-demo": "npm --prefix engine run tavern:bot-demo"
+    "tavern:bot-demo": "npm --prefix engine run tavern:bot-demo",
+    "agents:review": "npm --prefix engine run agents:review",
+    "agents:programmer": "npm --prefix engine run agents:programmer",
+    "agents:visitors": "npm --prefix engine run agents:visitors",
+    "agents:daemon": "npm --prefix engine run agents:daemon"
   },
   "engines": {
     "node": ">=22 <25"
