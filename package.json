@@ -16,7 +16,9 @@
     "agents:review": "npm --prefix engine run agents:review",
     "agents:programmer": "npm --prefix engine run agents:programmer",
     "agents:visitors": "npm --prefix engine run agents:visitors",
-    "agents:daemon": "npm --prefix engine run agents:daemon"
+    "agents:daemon": "npm --prefix engine run agents:daemon",
+    "agents:forum-provision": "npm --prefix engine run agents:forum-provision",
+    "agents:forum-round": "npm --prefix engine run agents:forum-round"
   },
   "engines": {
     "node": ">=22 <25"

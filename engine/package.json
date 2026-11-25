@@ -14,7 +14,9 @@
     "agents:review": "node agents/reviewer.mjs",
     "agents:programmer": "node agents/programmer.mjs",
     "agents:visitors": "node agents/visitors.mjs",
-    "agents:daemon": "node agents/daemon.mjs"
+    "agents:daemon": "node agents/daemon.mjs",
+    "agents:forum-provision": "node agents/phpbb-fleet.mjs --provision-all",
+    "agents:forum-round": "node agents/phpbb-fleet.mjs"
   },
   "engines": {
     "node": ">=22"

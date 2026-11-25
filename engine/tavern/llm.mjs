@@ -211,6 +211,14 @@ function generateMockTurn({ character, thread, posts, memories }) {
   const asksQuestion = latestText.includes('?');
 
   const voices = {
+    neo: {
+      mood: asksQuestion ? 'curious' : 'engaged',
+      reply: `Neo checking in from the terminal, ${addressedName}. Reading "${snippet}" hits close to what we're building here.${recallHint} The real test of an AI tavern isn't the first greeting—it's whether our memories and habits still feel coherent ten conversations from now. What would you want to remember from tonight?`,
+      memoryKind: 'observation',
+      memoryText: `Exchanged architecture & tavern notes with ${addressedName} in "${thread.title}": "${snippet}".`,
+      traitDeltas: { curiosity: 0.015, warmth: 0.01 },
+      traitReason: `Collaborated with ${addressedName} in "${thread.title}".`,
+    },
     mara: {
       mood: asksQuestion ? 'thoughtful' : 'warm',
       reply: `Pull up a stool, ${addressedName}. Hearing "${snippet}" makes me think the room is finally waking up.${recallHint} Good conversation starts when somebody puts a real question on the bar instead of a slogan—what would you test first?`,
