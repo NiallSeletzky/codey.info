@@ -243,6 +243,7 @@ test('phpBB client parses topics/posts and phpBB fleet provisions accounts and r
     statePath: path.join(dir, 'phpbb-agents.json'),
     dbPath: path.join(dir, 'forum-memory.db'),
     agentIds: ['neo', 'mara'],
+    enableNews: false,
     speakerDelayMs: 0,
     llm: createLlmProvider({ provider: 'mock' }),
     clientFactory: () => new PhpBbClient({ baseUrl: stubUrl, formDelayMs: 0 }),
@@ -254,4 +255,347 @@ test('phpBB client parses topics/posts and phpBB fleet provisions accounts and r
   assert.equal(memberships.get('Neo'), 9);
   assert.equal(memberships.get('Mara'), 9);
   assert.equal(topicPosts.length, 3);
+});
+
+test('News feed scanner parses RSS, Atom, HN Algolia, X API v2, and isolates partial feed failures', async () => {
+  const {
+    fetchNewsDigest,
+    parseHnAlgolia,
+    parseRssOrAtom,
+    parseXRecentSearch,
+  } = await import('../agents/news-feeds.mjs');
+
+  const rssItems = parseRssOrAtom(
+    `<rss><channel><item>
+      <title><![CDATA[Open-weight Llama &amp; Qwen agents hit new coding benchmark]]></title>
+      <link>https://example.org/open-models</link>
+      <description><![CDATA[<p>Local LLM benchmarks using SQLite and MCP tools.</p>]]></description>
+      <pubDate>Wed, 25 Nov 2026 10:00:00 GMT</pubDate>
+    </item></channel></rss>`,
+    'Example RSS'
+  );
+  assert.equal(rssItems.length, 1);
+  assert.equal(rssItems[0].title, 'Open-weight Llama & Qwen agents hit new coding benchmark');
+  assert.equal(rssItems[0].url, 'https://example.org/open-models');
+
+  const atomItems = parseRssOrAtom(
+    `<feed xmlns="http://www.w3.org/2005/Atom"><entry>
+      <title>Persistent Memory Graphs for Multi-Agent Systems</title>
+      <link rel="alternate" href="https://arxiv.org/abs/2611.01234"/>
+      <summary>A paper on bounded trait evolution and reasoning provenance.</summary>
+      <published>2026-11-25T09:00:00Z</published>
+    </entry></feed>`,
+    'arXiv cs.AI'
+  );
+  assert.equal(atomItems.length, 1);
+  assert.equal(atomItems[0].url, 'https://arxiv.org/abs/2611.01234');
+
+  const hnItems = parseHnAlgolia({
+    hits: [
+      {
+        objectID: '999',
+        title: 'Anthropic Claude MCP tool server in pure Node.js',
+        url: 'https://example.com/mcp-node',
+        points: 180,
+        num_comments: 64,
+        created_at: '2026-11-25T08:00:00Z',
+      },
+    ],
+  });
+  assert.equal(hnItems.length, 1);
+  assert.equal(hnItems[0].engagement, 180 + 64 * 2);
+
+  const xItems = parseXRecentSearch({
+    data: [
+      {
+        id: '123456',
+        author_id: 'u1',
+        text: 'Testing Grok and Claude side-by-side on multi-agent coding benchmarks today!',
+        created_at: '2026-11-25T11:00:00Z',
+        public_metrics: { like_count: 42, retweet_count: 9 },
+      },
+    ],
+    includes: { users: [{ id: 'u1', username: 'ai_builder', name: 'AI Builder' }] },
+  });
+  assert.equal(xItems.length, 1);
+  assert.equal(xItems[0].url, 'https://x.com/ai_builder/status/123456');
+  assert.equal(xItems[0].engagement, 60);
+
+  let capturedXAuth = null;
+  const mockFetch = async (url, init = {}) => {
+    if (String(url).startsWith('https://api.x.com/2/tweets/search/recent')) {
+      capturedXAuth = init.headers?.Authorization || null;
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: '777',
+              author_id: 'u2',
+              text: 'Open-weights DeepSeek release runs smoothly on Ollama and local GPUs.',
+              public_metrics: { like_count: 15, retweet_count: 4 },
+            },
+          ],
+          includes: { users: [{ id: 'u2', username: 'local_llm' }] },
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }
+    if (String(url).includes('broken.invalid')) {
+      return new Response('boom', { status: 503 });
+    }
+    return new Response(
+      `<rss><channel><item><title>SQLite 4 experimental notes for AI agents</title><link>https://custom.example/sqlite</link><description>Fast local memory store.</description></item></channel></rss>`,
+      { status: 200, headers: { 'content-type': 'application/xml' } }
+    );
+  };
+
+  const digest = await fetchNewsDigest({
+    sources: [{ id: 'bad', name: 'Broken Feed', kind: 'rss_atom', url: 'https://broken.invalid/rss' }],
+    extraFeedUrls: 'https://custom.example/feed.xml',
+    xBearerToken: 'test-x-token',
+    fetchImpl: mockFetch,
+  });
+  assert.equal(capturedXAuth, 'Bearer test-x-token');
+  assert.equal(digest.items.length, 2);
+  assert.equal(digest.sources.find((s) => s.source === 'Broken Feed')?.ok, false);
+  assert.equal(digest.sources.find((s) => s.source === 'X (AI & Agents)')?.ok, true);
+});
+
+test('Fandom engine classifies stories, evolves tiers to devoted fan, and deduplicates seen headlines', async (t) => {
+  const {
+    adoptInterestFromStory,
+    classifyNewsItem,
+    fanTierForScore,
+    loadFandomState,
+    markStorySeen,
+    pickFreshStoryAndHost,
+    saveFandomState,
+    summarizeCharacterFandoms,
+  } = await import('../agents/fandoms.mjs');
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-fandoms-'));
+  const statePath = path.join(dir, 'forum-fandoms.json');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const story = classifyNewsItem({
+    id: 'https://example.org/mcp-claude',
+    source: 'Hacker News (AI)',
+    title: 'Anthropic MCP multi-agent coding harness with SQLite memory',
+    url: 'https://example.org/mcp-claude',
+    summary: 'Open-source developer CLI and autonomous workflow.',
+    engagement: 120,
+  });
+  assert.ok(story.beats.includes('ai-agents'));
+  assert.ok(story.beats.includes('coding-tools'));
+  assert.ok(story.entities.includes('Anthropic'));
+  assert.ok(story.entities.includes('MCP'));
+  assert.ok(story.entities.includes('SQLite'));
+
+  const state = loadFandomState(statePath);
+  const pick = pickFreshStoryAndHost({
+    state,
+    items: [story],
+    rosterIds: ['neo', 'mara', 'percy', 'codey'],
+  });
+  assert.ok(pick);
+  assert.ok(['neo', 'codey'].includes(pick.hostId));
+
+  // Repeated exposure upgrades a character all the way to 'devoted fan'
+  for (let i = 0; i < 6; i += 1) {
+    adoptInterestFromStory(state, 'neo', story, 0.1);
+  }
+  assert.equal(fanTierForScore(state.characters.neo.topics['ai-agents'].score), 'devoted fan');
+  assert.equal(state.characters.neo.favoriteEntities.MCP.tier, 'devoted fan');
+
+  markStorySeen(state, story);
+  saveFandomState(statePath, state);
+
+  const reloaded = loadFandomState(statePath);
+  const summary = summarizeCharacterFandoms(reloaded, 'neo');
+  assert.ok(summary.topTopics.some((line) => line.includes('devoted fan')));
+  assert.equal(
+    pickFreshStoryAndHost({ state: reloaded, items: [story], rosterIds: ['neo', 'codey'] }),
+    null
+  );
+});
+
+test('phpBB fleet creates news-curated topic, elicits a second character reply, evolves fandoms, and skips duplicate stories', async (t) => {
+  const { PhpBbClient } = await import('../agents/phpbb-client.mjs');
+  const { runPhpBbConversationRound } = await import('../agents/phpbb-fleet.mjs');
+  const { loadFandomState } = await import('../agents/fandoms.mjs');
+
+  const users = new Map();
+  const memberships = new Map();
+  const topics = new Map();
+  let nextTopicId = 10;
+  let nextPostId = 200;
+  let currentUser = null;
+
+  const phpbbStub = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const params = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+    const u = new URL(req.url, 'http://127.0.0.1');
+
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'register') {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end('<form id="agreement" action="./ucp.php?mode=register"><input type="hidden" name="form_token" value="t1"></form>');
+      }
+      if (params.get('agreed') && !params.get('username')) {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end('<form id="register" action="./ucp.php?mode=register"><input type="hidden" name="form_token" value="t2"></form>');
+      }
+      users.set(params.get('username'), params.get('new_password'));
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end('<div id="message">Thank you for registering, your account has been created.</div>');
+    }
+
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'login') {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end('<form id="login" action="./ucp.php?mode=login"><input type="hidden" name="form_token" value="lt"></form>');
+      }
+      const uname = params.get('username');
+      if (users.get(uname) === params.get('password')) {
+        currentUser = uname;
+        res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': `sid=${uname}; Path=/` });
+        return res.end(`<a href="ucp.php?mode=logout">Logout [ ${uname} ]</a>`);
+      }
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end('<div class="error">Invalid login</div>');
+    }
+
+    if (u.pathname === '/ucp.php' && u.searchParams.get('i') === 'ucp_groups') {
+      if (req.method === 'GET') {
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end('<form id="ucp" action="./ucp.php?i=ucp_groups&amp;mode=membership"><input type="radio" name="selected" value="9"></form>');
+      }
+      if (params.get('confirm') === 'Yes') {
+        memberships.set(currentUser, 9);
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end('<div id="message">Successfully joined selected group.</div>');
+      }
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end('<form id="confirm" action="./ucp.php?i=ucp_groups&amp;mode=membership"><input type="hidden" name="confirm_key" value="k"></form>');
+    }
+
+    if (u.pathname === '/viewforum.php') {
+      const links = [...topics.values()]
+        .map((tp) => `<a href="./viewtopic.php?f=5&amp;t=${tp.id}" class="topictitle">${tp.title}</a>`)
+        .join('\n');
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(links);
+    }
+
+    if (u.pathname === '/viewtopic.php') {
+      const tid = Number(u.searchParams.get('t'));
+      const tp = topics.get(tid);
+      const blocks = (tp?.posts || [])
+        .map((p) => `<div id="p${p.id}" class="post"><a class="username">${p.author}</a><div class="content">${p.body}</div></div>`)
+        .join('\n');
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<h2 class="topic-title">${tp?.title || 'Unknown'}</h2>${blocks}`);
+    }
+
+    if (u.pathname === '/posting.php') {
+      const mode = u.searchParams.get('mode');
+      if (req.method === 'GET') {
+        const tid = u.searchParams.get('t');
+        const action = mode === 'post' ? './posting.php?mode=post&amp;f=5' : `./posting.php?mode=reply&amp;f=5&amp;t=${tid}`;
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(`<form id="postform" action="${action}"><input type="hidden" name="form_token" value="pt"></form>`);
+      }
+      if (mode === 'post') {
+        const tid = nextTopicId++;
+        const pid = nextPostId++;
+        topics.set(tid, {
+          id: tid,
+          title: params.get('subject'),
+          posts: [{ id: pid, author: currentUser, body: params.get('message') }],
+        });
+        res.writeHead(200, { 'content-type': 'text/html' });
+        return res.end(`<a href="./viewtopic.php?f=5&amp;t=${tid}">View your submitted message</a>`);
+      }
+      const tid = Number(u.searchParams.get('t'));
+      const pid = nextPostId++;
+      topics.get(tid).posts.push({ id: pid, author: currentUser, body: params.get('message') });
+      res.writeHead(200, { 'content-type': 'text/html' });
+      return res.end(`<div id="p${pid}" class="post">Posted</div>`);
+    }
+
+    res.writeHead(404);
+    res.end();
+  });
+
+  phpbbStub.listen(0, '127.0.0.1');
+  await once(phpbbStub, 'listening');
+  t.after(() => new Promise((resolve) => phpbbStub.close(resolve)));
+  const stubUrl = `http://127.0.0.1:${phpbbStub.address().port}`;
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-phpbb-news-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const sampleDigest = async () => ({
+    fetchedAt: '2026-11-25T12:00:00Z',
+    sources: [{ source: 'Hugging Face Blog', ok: true, count: 1, status: 200 }],
+    items: [
+      {
+        id: 'https://huggingface.co/blog/open-agents-2026',
+        source: 'Hugging Face Blog',
+        title: 'Open-Weight Autonomous Agents with Persistent SQLite Memory',
+        url: 'https://huggingface.co/blog/open-agents-2026',
+        summary: 'Hugging Face releases an open-source MCP agent toolkit.',
+        engagement: 95,
+      },
+    ],
+  });
+
+  const run1 = await runPhpBbConversationRound({
+    forumUrl: stubUrl,
+    boardId: 5,
+    groupId: 9,
+    statePath: path.join(dir, 'phpbb-agents.json'),
+    dbPath: path.join(dir, 'forum-memory.db'),
+    fandomStatePath: path.join(dir, 'forum-fandoms.json'),
+    mode: 'new-topic',
+    maxSpeakers: 2,
+    speakerDelayMs: 0,
+    newsFetcher: sampleDigest,
+    llm: createLlmProvider({ provider: 'mock' }),
+    clientFactory: () => new PhpBbClient({ baseUrl: stubUrl, formDelayMs: 0 }),
+  });
+
+  assert.equal(run1.status, 'completed');
+  assert.equal(run1.newTopicId, 10);
+  assert.equal(run1.actions.length, 2);
+  assert.equal(run1.actions[0].action, 'created_news_topic');
+  assert.equal(run1.actions[1].action, 'replied');
+  assert.equal(run1.actions[1].topicId, 10);
+  assert.match(topics.get(10).posts[0].body, /https:\/\/huggingface\.co\/blog\/open-agents-2026/);
+  assert.equal(topics.get(10).posts.length, 2);
+
+  const fandoms = loadFandomState(path.join(dir, 'forum-fandoms.json'));
+  assert.ok(fandoms.seenStoryIds.includes('https://huggingface.co/blog/open-agents-2026'));
+  assert.ok(fandoms.lastNewsTopicAt > 0);
+
+  // Run 2 with the exact same 1-story feed must NOT create a duplicate topic!
+  const run2 = await runPhpBbConversationRound({
+    forumUrl: stubUrl,
+    boardId: 5,
+    groupId: 9,
+    statePath: path.join(dir, 'phpbb-agents.json'),
+    dbPath: path.join(dir, 'forum-memory.db'),
+    fandomStatePath: path.join(dir, 'forum-fandoms.json'),
+    mode: 'new-topic',
+    maxSpeakers: 1,
+    speakerDelayMs: 0,
+    newsFetcher: sampleDigest,
+    llm: createLlmProvider({ provider: 'mock' }),
+    clientFactory: () => new PhpBbClient({ baseUrl: stubUrl, formDelayMs: 0 }),
+  });
+
+  assert.equal(run2.newTopicId, null);
+  assert.equal(topics.size, 1);
+  assert.equal(run2.actions[0].action, 'replied');
 });

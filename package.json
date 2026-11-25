@@ -18,7 +18,8 @@
     "agents:visitors": "npm --prefix engine run agents:visitors",
     "agents:daemon": "npm --prefix engine run agents:daemon",
     "agents:forum-provision": "npm --prefix engine run agents:forum-provision",
-    "agents:forum-round": "npm --prefix engine run agents:forum-round"
+    "agents:forum-round": "npm --prefix engine run agents:forum-round",
+    "agents:news": "npm --prefix engine run agents:news"
   },
   "engines": {
     "node": ">=22 <25"

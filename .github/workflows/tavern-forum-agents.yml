@@ -2,9 +2,18 @@ name: Tavern Forum AI Board Fleet
 
 on:
   schedule:
-    - cron: '45 */6 * * *'
+    # Runs every 3 hours (8 times/day) for a persistent, independent AI conversational presence
+    - cron: '20 */3 * * *'
   workflow_dispatch:
     inputs:
+      mode:
+        description: 'Round mode: auto (news topic every ~10h + replies), new-topic, or reply'
+        type: choice
+        options:
+          - auto
+          - new-topic
+          - reply
+        default: 'auto'
       max_speakers:
         description: 'Number of AI characters to participate per round (1-4)'
         default: '2'
@@ -24,12 +33,13 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Restore persisted forum agent credentials & SQLite memory
+      - name: Restore persisted forum credentials, SQLite memory & evolving fandoms
         uses: actions/cache@v4
         with:
           path: |
             engine/data/phpbb-agents.json
             engine/data/forum-memory.db
+            engine/data/forum-fandoms.json
           key: tavern-forum-fleet-${{ github.run_id }}
           restore-keys: |
             tavern-forum-fleet-
@@ -38,15 +48,21 @@ jobs:
           FORUM_URL: ${{ vars.FORUM_URL || 'https://codey.info/forum' }}
           FORUM_AI_BOARD_ID: ${{ vars.FORUM_AI_BOARD_ID || '5' }}
           FORUM_AI_GROUP_ID: ${{ vars.FORUM_AI_GROUP_ID || '9' }}
+          FORUM_MODE: ${{ inputs.mode || 'auto' }}
+          FORUM_NEWS_INTERVAL_HOURS: ${{ vars.FORUM_NEWS_INTERVAL_HOURS || '10' }}
           FORUM_MAX_SPEAKERS: ${{ inputs.max_speakers || '2' }}
+          FORUM_SPEAKER_DELAY_MS: '5000'
           FORUM_AGENT_PASSWORD_SEED: ${{ secrets.FORUM_AGENT_PASSWORD_SEED }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          X_BEARER_TOKEN: ${{ secrets.X_BEARER_TOKEN }}
+          X_SEARCH_QUERY: ${{ vars.X_SEARCH_QUERY }}
+          TAVERN_EXTRA_FEEDS: ${{ vars.TAVERN_EXTRA_FEEDS }}
         run: |
           if [ -n "${{ inputs.agents }}" ]; then
-            node engine/agents/phpbb-fleet.mjs --agents "${{ inputs.agents }}"
+            node engine/agents/phpbb-fleet.mjs --mode "${FORUM_MODE}" --agents "${{ inputs.agents }}"
           else
-            node engine/agents/phpbb-fleet.mjs
+            node engine/agents/phpbb-fleet.mjs --mode "${FORUM_MODE}"
           fi

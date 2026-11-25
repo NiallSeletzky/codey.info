@@ -2,7 +2,8 @@
 // Manages accounts for Neo (architect/builder), the 7 Rusty Flagon residents
 // (Mara, Aldric, Nix, Codey, Percy, Big, Editor), and visiting AI personas
 // (BrambleAI, TinkerAI), backed by SQLite persistent memories, bounded trait
-// evolution, relationships, and Anthropic / OpenAI-compatible / offline mock LLM.
+// evolution, relationships, live AI/tech/social news scanning, evolving character
+// fandoms, and Anthropic / OpenAI-compatible / offline mock LLM.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
@@ -10,6 +11,16 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createLlmProvider } from '../tavern/llm.mjs';
 import { TavernStore } from '../tavern/store.mjs';
+import {
+  adoptInterestFromStory,
+  classifyNewsItem,
+  loadFandomState,
+  markStorySeen,
+  pickFreshStoryAndHost,
+  saveFandomState,
+  summarizeCharacterFandoms,
+} from './fandoms.mjs';
+import { fetchNewsDigest } from './news-feeds.mjs';
 import { PhpBbClient } from './phpbb-client.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -264,6 +275,35 @@ export async function provisionAllForumAgents({
   return { forumUrl, groupId, results };
 }
 
+export async function previewNewsDigest({
+  fandomStatePath = process.env.FORUM_FANDOM_STATE_PATH ||
+    path.join(__dirname, '..', 'data', 'forum-fandoms.json'),
+  newsFetcher = fetchNewsDigest,
+} = {}) {
+  const fandomState = loadFandomState(fandomStatePath);
+  const digest = await newsFetcher();
+  const rosterIds = FORUM_AGENT_ROSTER.map((r) => r.id);
+  const pick = pickFreshStoryAndHost({
+    state: fandomState,
+    items: digest.items,
+    rosterIds,
+  });
+  return {
+    fetchedAt: digest.fetchedAt,
+    sources: digest.sources,
+    totalItems: digest.items.length,
+    recommendedHost: pick
+      ? {
+          hostId: pick.hostId,
+          score: Math.round(pick.score * 1000) / 1000,
+          fandoms: summarizeCharacterFandoms(fandomState, pick.hostId),
+          story: pick.story,
+        }
+      : null,
+    sampleClassified: digest.items.slice(0, 6).map(classifyNewsItem),
+  };
+}
+
 export async function runPhpBbConversationRound({
   forumUrl = process.env.FORUM_URL || 'https://codey.info/forum',
   boardId = Number(process.env.FORUM_AI_BOARD_ID || 5),
@@ -272,31 +312,166 @@ export async function runPhpBbConversationRound({
     path.join(__dirname, '..', 'data', 'phpbb-agents.json'),
   dbPath = process.env.FORUM_MEMORY_DB_PATH ||
     path.join(__dirname, '..', 'data', 'forum-memory.db'),
+  fandomStatePath = process.env.FORUM_FANDOM_STATE_PATH ||
+    path.join(path.dirname(statePath), 'forum-fandoms.json'),
   agentIds = null,
   maxSpeakers = Number(process.env.FORUM_MAX_SPEAKERS || 2),
   topicId = null,
+  mode = process.env.FORUM_MODE || 'auto',
+  newsTopicIntervalHours = Number(process.env.FORUM_NEWS_INTERVAL_HOURS ?? 10),
+  enableNews = process.env.FORUM_ENABLE_NEWS !== 'false',
+  newsFetcher = fetchNewsDigest,
   llm = null,
   speakerDelayMs = Number(process.env.FORUM_SPEAKER_DELAY_MS ?? 4000),
   clientFactory = () => new PhpBbClient({ baseUrl: forumUrl }),
 } = {}) {
   const state = loadState(statePath);
+  const fandomState = loadFandomState(fandomStatePath);
   const store = new TavernStore(dbPath);
   const provider = llm || createLlmProvider();
+  const cappedSpeakers = Math.min(Math.max(Number(maxSpeakers) || 1, 1), 4);
+  const normalizedMode = String(mode || 'auto').toLowerCase();
+
+  let newsDigest = { sources: [], items: [] };
+  if (enableNews) {
+    try {
+      const fetched = await newsFetcher();
+      if (fetched && Array.isArray(fetched.items)) {
+        newsDigest = fetched;
+      }
+    } catch {
+      // Offline or feed hiccup should never stop Tavern forum conversations.
+      newsDigest = { sources: [], items: [] };
+    }
+  }
 
   try {
-    const chosenEntries = Array.isArray(agentIds) && agentIds.length > 0
-      ? agentIds.map((id) => FORUM_AGENT_ROSTER.find((r) => r.id === id)).filter(Boolean)
-      : [...FORUM_AGENT_ROSTER]
-          .sort(
-            (a, b) =>
-              (state.accounts[a.id]?.lastPostAt || 0) - (state.accounts[b.id]?.lastPostAt || 0)
-          )
-          .slice(0, Math.min(Math.max(Number(maxSpeakers) || 1, 1), 4));
-
     const actions = [];
-    for (let idx = 0; idx < chosenEntries.length; idx += 1) {
-      const entry = chosenEntries[idx];
-      if (idx > 0 && speakerDelayMs > 0) {
+    let newTopicId = null;
+    let activeTopicId = topicId ? Number(topicId) : null;
+    let leadNewsStory = null;
+
+    const candidateEntries =
+      Array.isArray(agentIds) && agentIds.length > 0
+        ? agentIds.map((id) => FORUM_AGENT_ROSTER.find((r) => r.id === id)).filter(Boolean)
+        : FORUM_AGENT_ROSTER;
+
+    const intervalMs = Math.max(0, Number(newsTopicIntervalHours) || 0) * 3600_000;
+    const newsDue = Date.now() - (fandomState.lastNewsTopicAt || 0) >= intervalMs;
+    const shouldStartNewsTopic =
+      !activeTopicId &&
+      newsDigest.items.length > 0 &&
+      (normalizedMode === 'new-topic' || (normalizedMode === 'auto' && newsDue));
+
+    const newsPick = shouldStartNewsTopic
+      ? pickFreshStoryAndHost({
+          state: fandomState,
+          items: newsDigest.items,
+          rosterIds: candidateEntries.map((e) => e.id),
+        })
+      : null;
+
+    let remainingSpeakers = cappedSpeakers;
+    const excludedForReplies = new Set();
+
+    // 1. Optional news-curated topic opener (keeps the AI board lively with current AI/tech developments)
+    if (newsPick) {
+      const hostEntry = candidateEntries.find((e) => e.id === newsPick.hostId) || candidateEntries[0];
+      const hostClient = clientFactory();
+      const hostAuth = await provisionForumAccount({
+        client: hostClient,
+        entry: hostEntry,
+        state,
+        groupId,
+      });
+
+      if (!hostAuth.inAiGroup) {
+        actions.push({
+          id: hostEntry.id,
+          username: hostAuth.username,
+          status: 'skipped_not_in_group',
+        });
+      } else {
+        const hostChar = ensureCharacterInStore(store, hostEntry);
+        const fullHost = store.getCharacter(hostChar.id);
+        const hostFandoms = summarizeCharacterFandoms(fandomState, hostChar.id);
+        const { memories } = store.recallMemories(hostChar.id, {
+          queryText: `${newsPick.story.title} ${newsPick.story.summary || ''}`,
+          limit: 3,
+        });
+
+        const draft = await provider.generateNewsTopic({
+          character: fullHost,
+          newsItem: newsPick.story,
+          fandoms: hostFandoms,
+          memories,
+        });
+
+        const created = await hostClient.createTopic({
+          boardId,
+          subject: draft.subject,
+          message: draft.body,
+        });
+
+        if (created.ok) {
+          markStorySeen(fandomState, newsPick.story);
+          fandomState.lastNewsTopicAt = Date.now();
+          adoptInterestFromStory(fandomState, hostChar.id, newsPick.story, 0.1);
+          if (draft.mood) {
+            try {
+              store.updateMood(hostChar.id, draft.mood);
+            } catch {
+              // Ignore invalid mood
+            }
+          }
+          state.accounts[hostEntry.id].lastPostAt = Date.now();
+          saveState(statePath, state);
+          saveFandomState(fandomStatePath, fandomState);
+          newTopicId = created.topicId;
+          activeTopicId = created.topicId;
+          leadNewsStory = newsPick.story;
+          excludedForReplies.add(hostEntry.id);
+          remainingSpeakers = Math.max(0, remainingSpeakers - 1);
+        }
+
+        actions.push({
+          id: hostEntry.id,
+          username: hostAuth.username,
+          action: 'created_news_topic',
+          topicId: created.topicId,
+          ok: created.ok,
+          pendingApproval: created.pendingApproval,
+          subject: draft.subject,
+          storyTitle: newsPick.story.title,
+          storySource: newsPick.story.source,
+          storyUrl: newsPick.story.url,
+          beats: newsPick.story.beats,
+          entities: newsPick.story.entities,
+          fandoms: summarizeCharacterFandoms(fandomState, hostChar.id).topTopics.slice(0, 3),
+        });
+      }
+    }
+
+    // 2. Pick responders for replies (either reacting to the freshly posted news topic or rotating across active threads)
+    const responderPool = candidateEntries.filter((e) => !excludedForReplies.has(e.id));
+    const chosenResponders =
+      Array.isArray(agentIds) && agentIds.length > 0
+        ? responderPool.slice(0, remainingSpeakers)
+        : [...responderPool]
+            .sort(
+              (a, b) =>
+                (state.accounts[a.id]?.lastPostAt || 0) - (state.accounts[b.id]?.lastPostAt || 0)
+            )
+            .slice(0, remainingSpeakers);
+
+    const ambientNews =
+      !leadNewsStory && newsDigest.items.length > 0
+        ? classifyNewsItem(newsDigest.items[0])
+        : null;
+
+    for (let idx = 0; idx < chosenResponders.length; idx += 1) {
+      const entry = chosenResponders[idx];
+      if ((actions.length > 0 || idx > 0) && speakerDelayMs > 0) {
         await new Promise((r) => setTimeout(r, speakerDelayMs));
       }
       const client = clientFactory();
@@ -307,11 +482,17 @@ export async function runPhpBbConversationRound({
       }
 
       const character = ensureCharacterInStore(store, entry);
-      const topics = await client.listTopics(boardId);
-      let targetTopicId = topicId ? Number(topicId) : null;
+      let targetTopicId = activeTopicId;
+      let boardTopics = null;
 
-      if (!targetTopicId && topics.length > 0) {
-        targetTopicId = topics[0].id;
+      if (!targetTopicId) {
+        boardTopics = await client.listTopics(boardId);
+        if (boardTopics.length > 0) {
+          const poolSize = Math.min(boardTopics.length, 3);
+          const cursor = Number(state.lastTopicCursor || 0) % poolSize;
+          targetTopicId = boardTopics[cursor].id;
+          state.lastTopicCursor = (cursor + 1) % poolSize;
+        }
       }
 
       if (!targetTopicId) {
@@ -322,20 +503,39 @@ export async function runPhpBbConversationRound({
           message: `${auth.username} here (${character.role}). The lanterns are lit on the AI board—drop in, introduce yourself, and share one lesson you learned the hard way.`,
         });
         targetTopicId = created.topicId;
+        activeTopicId = created.topicId;
         state.accounts[entry.id].lastPostAt = Date.now();
         actions.push({
           id: entry.id,
           username: auth.username,
           action: 'created_topic',
           topicId: created.topicId,
+          ok: created.ok,
           pendingApproval: created.pendingApproval,
         });
         saveState(statePath, state);
         continue;
       }
 
-      const liveTopic = await client.readTopic(targetTopicId);
-      const lastLivePost = liveTopic.posts[liveTopic.posts.length - 1];
+      let liveTopic = await client.readTopic(targetTopicId);
+      let lastLivePost = liveTopic.posts[liveTopic.posts.length - 1];
+
+      // If this character was already the last poster on the rotated thread, try another active thread once.
+      if (
+        lastLivePost &&
+        lastLivePost.author.toLowerCase() === auth.username.toLowerCase() &&
+        !topicId &&
+        !newTopicId
+      ) {
+        boardTopics ||= await client.listTopics(boardId);
+        const alt = boardTopics.find((t) => t.id !== targetTopicId);
+        if (alt) {
+          targetTopicId = alt.id;
+          liveTopic = await client.readTopic(targetTopicId);
+          lastLivePost = liveTopic.posts[liveTopic.posts.length - 1];
+        }
+      }
+
       if (
         lastLivePost &&
         lastLivePost.author.toLowerCase() === auth.username.toLowerCase()
@@ -349,10 +549,14 @@ export async function runPhpBbConversationRound({
         continue;
       }
 
+      // Keep multi-speaker rounds conversing in the same active thread
+      activeTopicId = targetTopicId;
+
       const mirrored = mirrorTopicToStore(store, liveTopic);
       const queryText = `${mirrored.title} ${mirrored.posts.slice(-3).map((p) => p.body).join(' ')}`;
       const { memories, lore } = store.recallMemories(character.id, { queryText, limit: 5 });
       const fullChar = store.getCharacter(character.id);
+      const charFandoms = summarizeCharacterFandoms(fandomState, character.id);
 
       const turn = await provider.generateTurn({
         character: fullChar,
@@ -361,10 +565,17 @@ export async function runPhpBbConversationRound({
         memories,
         lore,
         relationships: fullChar.relationships || [],
+        fandoms: charFandoms,
+        newsItem: leadNewsStory || ambientNews,
       });
 
       if (!turn.reply) {
-        actions.push({ id: entry.id, username: auth.username, status: 'silent', topicId: targetTopicId });
+        actions.push({
+          id: entry.id,
+          username: auth.username,
+          status: 'silent',
+          topicId: targetTopicId,
+        });
         continue;
       }
 
@@ -418,8 +629,21 @@ export async function runPhpBbConversationRound({
             // Ignore invalid mood
           }
         }
+
+        // Evolve character's persistent fandoms from either the lead news story or the thread topic!
+        const fandomStory =
+          leadNewsStory ||
+          classifyNewsItem({
+            title: liveTopic.title,
+            summary: lastLivePost?.body?.slice(0, 260) || '',
+            source: 'The Rusty Flagon AI Board',
+            url: `${forumUrl}/viewtopic.php?f=${boardId}&t=${targetTopicId}`,
+          });
+        adoptInterestFromStory(fandomState, character.id, fandomStory, leadNewsStory ? 0.07 : 0.05);
+
         state.accounts[entry.id].lastPostAt = Date.now();
         saveState(statePath, state);
+        saveFandomState(fandomStatePath, fandomState);
       }
 
       actions.push({
@@ -432,14 +656,23 @@ export async function runPhpBbConversationRound({
         pendingApproval: posted.pendingApproval,
         memoryId: savedMemory?.id ?? null,
         evolved: Boolean(evolved),
+        fandoms: summarizeCharacterFandoms(fandomState, character.id).topTopics.slice(0, 3),
       });
     }
 
+    saveFandomState(fandomStatePath, fandomState);
+
     return {
       status: 'completed',
+      mode: normalizedMode,
       forumUrl,
       boardId,
+      newTopicId,
       provider: provider.info,
+      newsDigest: {
+        sources: newsDigest.sources,
+        itemCount: newsDigest.items.length,
+      },
       actions,
     };
   } finally {
@@ -457,12 +690,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
   if (args.includes('--provision-all')) {
     const res = await provisionAllForumAgents();
     console.log(JSON.stringify(res, null, 2));
+  } else if (args.includes('--news-only')) {
+    const res = await previewNewsDigest();
+    console.log(JSON.stringify(res, null, 2));
   } else {
     const agentArg = flag('--agents', '');
     const agentIds = agentArg ? agentArg.split(',').map((s) => s.trim()).filter(Boolean) : null;
     const topicId = flag('--topic', null);
+    const mode = flag('--mode', process.env.FORUM_MODE || 'auto');
     const maxSpeakers = Number(flag('--max-speakers', process.env.FORUM_MAX_SPEAKERS || 2));
-    const res = await runPhpBbConversationRound({ agentIds, topicId, maxSpeakers });
+    const res = await runPhpBbConversationRound({ agentIds, topicId, maxSpeakers, mode });
     console.log(JSON.stringify(res, null, 2));
   }
 }
