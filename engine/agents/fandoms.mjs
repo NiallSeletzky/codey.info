@@ -15,6 +15,7 @@ export const TOPIC_BEATS = Object.freeze({
   'robotics': ['robot', 'robotics', 'humanoid', 'drone', 'embodied', 'sensor', 'actuator'],
   'security-safety': ['security', 'prompt injection', 'privacy', 'vulnerability', 'sandbox', 'attack', 'safety', 'exploit', 'audit'],
   'music-culture': ['music', 'art', 'game', 'story', 'film', 'creative', 'society', 'education', 'journalism', 'writing'],
+  'elon-watch': ['@elonmusk', 'elon musk', 'spacex', 'starship', 'tesla', 'optimus', 'neuralink', 'starlink', 'xai', 'grok', 'colossus'],
 });
 
 export const NOTABLE_ENTITIES = Object.freeze([
@@ -22,6 +23,7 @@ export const NOTABLE_ENTITIES = Object.freeze([
   'DeepMind', 'DeepSeek', 'Meta', 'Llama', 'Qwen', 'Mistral', 'Hugging Face',
   'Ollama', 'MCP', 'SQLite', 'Python', 'JavaScript', 'Node.js', 'Rust', 'Linux',
   'NVIDIA', 'arXiv', 'GitHub',
+  'Elon Musk', 'SpaceX', 'Starship', 'Tesla', 'Optimus', 'Starlink', 'Neuralink',
 ]);
 
 // Starting natural curiosity seeds per Tavern character (0..1)
@@ -36,6 +38,7 @@ export const SEED_FANDOMS = Object.freeze({
   editor: { 'reasoning-research': 0.5, 'security-safety': 0.48, 'music-culture': 0.45 },
   'bramble-bard': { 'music-culture': 0.58, 'ai-agents': 0.42, 'robotics': 0.4 },
   'tinker-bench': { 'coding-tools': 0.56, 'open-models': 0.52, 'ai-hardware': 0.48 },
+  'elon-ai': { 'elon-watch': 0.82, 'ai-hardware': 0.62, robotics: 0.6, 'ai-agents': 0.52 },
 });
 
 export function fanTierForScore(score) {
@@ -53,6 +56,9 @@ export function classifyNewsItem(item) {
       beats.push(beat);
     }
   }
+  if (item.isElonPost && !beats.includes('elon-watch')) {
+    beats.unshift('elon-watch');
+  }
   if (beats.length === 0) beats.push('ai-agents');
 
   const entities = NOTABLE_ENTITIES.filter((entity) =>
@@ -60,6 +66,9 @@ export function classifyNewsItem(item) {
       `${item.title || ''} ${item.summary || ''}`
     )
   );
+  if (item.isElonPost && !entities.includes('Elon Musk')) {
+    entities.unshift('Elon Musk');
+  }
 
   return { ...item, beats, entities };
 }
@@ -196,7 +205,15 @@ export function pickFreshStoryAndHost({ state, items, rosterIds }) {
         (acc, e) => acc + (profile.favoriteEntities?.[e]?.score ? 0.1 : 0.03),
         0
       );
-      const total = beatScore + engagementBonus + entityBonus;
+      const elonAffinity = story.isElonPost
+        ? charId === 'elon-ai'
+          ? 0.35
+          : -0.1
+        : charId === 'elon-ai'
+          ? -0.12
+          : 0;
+      const repeatHostPenalty = state.lastHostId && state.lastHostId === charId ? -0.25 : 0;
+      const total = beatScore + engagementBonus + entityBonus + elonAffinity + repeatHostPenalty;
       if (!best || total > best.score) {
         best = { story, hostId: charId, score: total };
       }

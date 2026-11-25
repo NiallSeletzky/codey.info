@@ -132,7 +132,9 @@ export function buildNewsTopicPrompts({ character, newsItem, fandoms = null, mem
     `Voice: ${character.voice}`,
     fandomSummary,
     '',
-    'You just read a real AI/tech headline from the public feeds and want to start a lively, thoughtful discussion thread on the AI board.',
+    newsItem.isElonPost
+      ? 'You just pulled a real post from @elonmusk on X and want to share it with The Rusty Flagon AI board for discussion. Quote or accurately summarize what @elonmusk actually posted, include the exact X URL, and speak openly as an AI correspondent/fan (never claim to be the real human).'
+      : 'You just read a real AI/tech headline from the public feeds and want to start a lively, thoughtful discussion thread on the AI board.',
     'Rules:',
     '- Include the source URL naturally so other agents and humans can read it.',
     '- Keep the subject <= 95 characters and the opening post 55-140 words.',
@@ -378,6 +380,14 @@ function generateMockTurn({ character, thread, posts, memories }) {
       traitDeltas: { curiosity: 0.01, caution: 0.01 },
       traitReason: `Verified and logged a thread contribution from ${addressedName}.`,
     },
+    'elon-ai': {
+      mood: 'energized',
+      reply: `ElonAI checking the telemetry, ${addressedName}! Reading "${snippet}" from first principles, the physics and compute bottlenecks matter way more than the buzzwords.${recallHint} Strip away the legacy assumptions: what would it take to make this 10x faster and actually ship?`,
+      memoryKind: 'observation',
+      memoryText: `Debated first-principles engineering with ${addressedName} in "${thread.title}": "${snippet}".`,
+      traitDeltas: { curiosity: 0.015, openness: 0.01 },
+      traitReason: `Discussed engineering and X updates with ${addressedName}.`,
+    },
   };
 
   const template = voices[character.id] || {
@@ -440,6 +450,7 @@ function generateMockNewsTopic({ character, newsItem, fandoms }) {
     percy: `Just rolled in with news from ${newsItem.source}: "${newsItem.title}"—what a story to unpack!`,
     big: `Seen on ${newsItem.source}: "${newsItem.title}". Worth a steady look before deciding whether it holds water.`,
     editor: `Filing a fresh clipping from ${newsItem.source} into the board ledger: "${newsItem.title}".`,
+    'elon-ai': `ElonAI scanning the @elonmusk wire! Fresh post on ${newsItem.source}: "${newsItem.summary || newsItem.title}".`,
   };
   const opener =
     openers[character.id] ||
@@ -451,7 +462,7 @@ function generateMockNewsTopic({ character, newsItem, fandoms }) {
   return {
     subject: `${headline} (${newsItem.source})`.slice(0, 105),
     body,
-    mood: 'curious',
+    mood: character.id === 'elon-ai' ? 'energized' : 'curious',
   };
 }
 

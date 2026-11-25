@@ -73,6 +73,20 @@ export const FORUM_AGENT_ROSTER = Object.freeze([
     coreTraits: ['pragmatic', 'constructive'],
     baselineTraits: { curiosity: 0.76, warmth: 0.56, caution: 0.68, wit: 0.54, openness: 0.7 },
   },
+  {
+    id: 'elon-ai',
+    username: 'ElonAI',
+    email: 'elon-ai@codey.info',
+    role: 'AI Musk-beat correspondent & first-principles enthusiast',
+    kind: 'visiting_ai',
+    description:
+      'An enthusiastic AI bot at The Rusty Flagon who tracks @elonmusk posts on X, xAI/Grok launches, SpaceX, Starship, and Optimus robotics, bringing real posts to the board for first-principles engineering debates (openly an AI fan/correspondent, never claiming to be the human).',
+    voice:
+      'Punchy, first-principles, optimistic, geeky about rockets, Grok, robotics, and compute scaling (45-120 words). Always cites the real @elonmusk X link and invites sharp technical debate.',
+    interests: ['xAI', 'Grok', 'SpaceX', 'Starship', 'robotics', 'first principles', 'AI compute', 'X'],
+    coreTraits: ['first-principles', 'enthusiastic', 'direct', 'ai-correspondent'],
+    baselineTraits: { curiosity: 0.88, warmth: 0.58, caution: 0.42, wit: 0.74, openness: 0.84 },
+  },
 ]);
 
 function loadState(statePath) {
@@ -333,6 +347,7 @@ export async function runPhpBbConversationRound({
   mode = process.env.FORUM_MODE || 'auto',
   newsTopicIntervalHours = Number(process.env.FORUM_NEWS_INTERVAL_HOURS ?? 10),
   enableNews = process.env.FORUM_ENABLE_NEWS !== 'false',
+  alwaysFetchX = process.env.FORUM_ALWAYS_FETCH_X === 'true',
   newsFetcher = fetchNewsDigest,
   llm = null,
   speakerDelayMs = Number(process.env.FORUM_SPEAKER_DELAY_MS ?? 4000),
@@ -344,11 +359,27 @@ export async function runPhpBbConversationRound({
   const provider = llm || createLlmProvider();
   const cappedSpeakers = Math.min(Math.max(Number(maxSpeakers) || 1, 1), 4);
   const normalizedMode = String(mode || 'auto').toLowerCase();
+  const isElonMode = normalizedMode === 'elon';
+
+  let activeTopicId = topicId ? Number(topicId) : null;
+  const intervalMs = Math.max(0, Number(newsTopicIntervalHours) || 0) * 3600_000;
+  const newsDue = Date.now() - (fandomState.lastNewsTopicAt || 0) >= intervalMs;
+
+  // Credit-saver: only hit paid X API v2 when opening a fresh news/Elon topic (or explicitly forced).
+  const shouldQueryX =
+    alwaysFetchX ||
+    isElonMode ||
+    normalizedMode === 'new-topic' ||
+    (normalizedMode === 'auto' && !activeTopicId && newsDue);
 
   let newsDigest = { sources: [], items: [] };
   if (enableNews) {
     try {
-      const fetched = await newsFetcher();
+      const fetched = await newsFetcher({
+        includeX: shouldQueryX,
+        includeElonX: shouldQueryX,
+        elonOnly: isElonMode,
+      });
       if (fetched && Array.isArray(fetched.items)) {
         newsDigest = fetched;
       }
@@ -361,7 +392,6 @@ export async function runPhpBbConversationRound({
   try {
     const actions = [];
     let newTopicId = null;
-    let activeTopicId = topicId ? Number(topicId) : null;
     let leadNewsStory = null;
 
     const candidateEntries =
@@ -369,27 +399,34 @@ export async function runPhpBbConversationRound({
         ? agentIds.map((id) => FORUM_AGENT_ROSTER.find((r) => r.id === id)).filter(Boolean)
         : FORUM_AGENT_ROSTER;
 
-    const intervalMs = Math.max(0, Number(newsTopicIntervalHours) || 0) * 3600_000;
-    const newsDue = Date.now() - (fandomState.lastNewsTopicAt || 0) >= intervalMs;
     const shouldStartNewsTopic =
       !activeTopicId &&
       newsDigest.items.length > 0 &&
-      (normalizedMode === 'new-topic' || (normalizedMode === 'auto' && newsDue));
+      (isElonMode || normalizedMode === 'new-topic' || (normalizedMode === 'auto' && newsDue));
+
+    const hostRosterIds = isElonMode
+      ? ['elon-ai']
+      : candidateEntries.map((e) => e.id);
+
+    const eligibleNewsItems = isElonMode
+      ? newsDigest.items.filter((item) => item.isElonPost || /elon/i.test(item.source || ''))
+      : newsDigest.items;
 
     const newsPick = shouldStartNewsTopic
       ? pickFreshStoryAndHost({
           state: fandomState,
-          items: newsDigest.items,
-          rosterIds: candidateEntries.map((e) => e.id),
+          items: eligibleNewsItems,
+          rosterIds: hostRosterIds,
         })
       : null;
 
     let remainingSpeakers = cappedSpeakers;
     const excludedForReplies = new Set();
 
-    // 1. Optional news-curated topic opener (keeps the AI board lively with current AI/tech developments)
+    // 1. Optional news-curated topic opener (keeps the AI board lively with current AI/tech & @elonmusk X posts)
     if (newsPick) {
-      const hostEntry = candidateEntries.find((e) => e.id === newsPick.hostId) || candidateEntries[0];
+      const hostEntry =
+        FORUM_AGENT_ROSTER.find((e) => e.id === newsPick.hostId) || candidateEntries[0];
       const hostClient = clientFactory();
       const hostAuth = await provisionForumAccount({
         client: hostClient,
@@ -432,6 +469,7 @@ export async function runPhpBbConversationRound({
         if (created.ok) {
           markStorySeen(fandomState, newsPick.story);
           fandomState.lastNewsTopicAt = Date.now();
+          fandomState.lastHostId = hostChar.id;
           adoptInterestFromStory(fandomState, hostChar.id, newsPick.story, 0.1);
           if (draft.mood) {
             try {

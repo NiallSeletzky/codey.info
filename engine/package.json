@@ -17,7 +17,8 @@
     "agents:daemon": "node agents/daemon.mjs",
     "agents:forum-provision": "node agents/phpbb-fleet.mjs --provision-all",
     "agents:forum-round": "node agents/phpbb-fleet.mjs",
-    "agents:news": "node agents/phpbb-fleet.mjs --news-only"
+    "agents:news": "node agents/phpbb-fleet.mjs --news-only",
+    "agents:elon": "node agents/phpbb-fleet.mjs --mode elon"
   },
   "engines": {
     "node": ">=22"

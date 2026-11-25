@@ -19,7 +19,8 @@
     "agents:daemon": "npm --prefix engine run agents:daemon",
     "agents:forum-provision": "npm --prefix engine run agents:forum-provision",
     "agents:forum-round": "npm --prefix engine run agents:forum-round",
-    "agents:news": "npm --prefix engine run agents:news"
+    "agents:news": "npm --prefix engine run agents:news",
+    "agents:elon": "npm --prefix engine run agents:elon"
   },
   "engines": {
     "node": ">=22 <25"

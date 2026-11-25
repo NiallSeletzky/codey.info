@@ -353,6 +353,7 @@ test('News feed scanner parses RSS, Atom, HN Algolia, X API v2, and isolates par
     sources: [{ id: 'bad', name: 'Broken Feed', kind: 'rss_atom', url: 'https://broken.invalid/rss' }],
     extraFeedUrls: 'https://custom.example/feed.xml',
     xBearerToken: 'test-x-token',
+    includeElonX: false,
     fetchImpl: mockFetch,
   });
   assert.equal(capturedXAuth, 'Bearer test-x-token');
@@ -598,4 +599,177 @@ test('phpBB fleet creates news-curated topic, elicits a second character reply, 
   assert.equal(run2.newTopicId, null);
   assert.equal(topics.size, 1);
   assert.equal(run2.actions[0].action, 'replied');
+});
+
+test('X credit-saver skips X when not due, Elon filter omits user expansions, and ElonAI hosts @elonmusk X posts', async (t) => {
+  const { fetchElonXPosts, fetchNewsDigest } = await import('../agents/news-feeds.mjs');
+  const { PhpBbClient } = await import('../agents/phpbb-client.mjs');
+  const { runPhpBbConversationRound } = await import('../agents/phpbb-fleet.mjs');
+  const { loadFandomState } = await import('../agents/fandoms.mjs');
+
+  const requestedUrls = [];
+  const mockFetch = async (url) => {
+    const str = String(url);
+    requestedUrls.push(str);
+    if (str.includes('from%3Aelonmusk')) {
+      return new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: '99887766',
+              text: 'Starship flight test hardware and Grok cluster updates looking solid!',
+              created_at: '2026-11-25T12:30:00Z',
+              public_metrics: { like_count: 15000, retweet_count: 2500 },
+            },
+          ],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } }
+      );
+    }
+    return new Response('<rss><channel></channel></rss>', { status: 200 });
+  };
+
+  // 1. Credit-saver: includeX: false makes ZERO calls to api.x.com
+  const savedDigest = await fetchNewsDigest({
+    sources: [],
+    xBearerToken: 'test-token',
+    includeX: false,
+    fetchImpl: mockFetch,
+  });
+  assert.equal(requestedUrls.length, 0);
+  assert.equal(savedDigest.sources[0].skipped, true);
+
+  // 2. Elon filter calls api.x.com WITHOUT expansions=author_id (saves profile read credits)
+  const elonRes = await fetchElonXPosts({
+    xBearerToken: 'test-token',
+    fetchImpl: mockFetch,
+  });
+  assert.equal(elonRes.ok, true);
+  assert.equal(elonRes.items.length, 1);
+  assert.equal(elonRes.items[0].url, 'https://x.com/elonmusk/status/99887766');
+  assert.equal(elonRes.items[0].isElonPost, true);
+  assert.ok(!requestedUrls[0].includes('expansions='));
+
+  // 3. ElonAI hosts @elonmusk post in mode: 'elon', and auto/reply skips X when news is not due
+  const users = new Map();
+  const topics = new Map();
+  let nextTopicId = 20;
+  let nextPostId = 300;
+  let currentUser = null;
+
+  const stub = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const params = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+    const u = new URL(req.url, 'http://127.0.0.1');
+
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'register') {
+      if (req.method === 'GET') return res.end('<form id="agreement" action="./ucp.php?mode=register"></form>');
+      if (params.get('agreed') && !params.get('username')) return res.end('<form id="register" action="./ucp.php?mode=register"></form>');
+      users.set(params.get('username'), params.get('new_password'));
+      return res.end('<div id="message">Thank you for registering, your account has been created.</div>');
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'login') {
+      if (req.method === 'GET') return res.end('<form id="login" action="./ucp.php?mode=login"></form>');
+      if (users.get(params.get('username')) === params.get('password')) {
+        currentUser = params.get('username');
+        res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': `sid=${currentUser}; Path=/` });
+        return res.end(`<a href="ucp.php?mode=logout">Logout [ ${currentUser} ]</a>`);
+      }
+      return res.end('<div class="error">Invalid</div>');
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('i') === 'ucp_groups') {
+      if (req.method === 'GET') return res.end('<form id="ucp" action="./ucp.php?i=ucp_groups&amp;mode=membership"><input type="radio" name="selected" value="9"></form>');
+      if (params.get('confirm') === 'Yes') return res.end('<div id="message">Successfully joined selected group.</div>');
+      return res.end('<form id="confirm" action="./ucp.php?i=ucp_groups&amp;mode=membership"></form>');
+    }
+    if (u.pathname === '/viewforum.php') {
+      return res.end([...topics.values()].map((tp) => `<a href="./viewtopic.php?f=5&amp;t=${tp.id}" class="topictitle">${tp.title}</a>`).join('\n'));
+    }
+    if (u.pathname === '/viewtopic.php') {
+      const tp = topics.get(Number(u.searchParams.get('t')));
+      const blocks = (tp?.posts || []).map((p) => `<div id="p${p.id}" class="post"><a class="username">${p.author}</a><div class="content">${p.body}</div></div>`).join('\n');
+      return res.end(`<h2 class="topic-title">${tp?.title}</h2>${blocks}`);
+    }
+    if (u.pathname === '/posting.php') {
+      const mode = u.searchParams.get('mode');
+      if (req.method === 'GET') {
+        const action = mode === 'post' ? './posting.php?mode=post&amp;f=5' : `./posting.php?mode=reply&amp;f=5&amp;t=${u.searchParams.get('t')}`;
+        return res.end(`<form id="postform" action="${action}"></form>`);
+      }
+      if (mode === 'post') {
+        const tid = nextTopicId++;
+        topics.set(tid, { id: tid, title: params.get('subject'), posts: [{ id: nextPostId++, author: currentUser, body: params.get('message') }] });
+        return res.end(`<a href="./viewtopic.php?f=5&amp;t=${tid}">View your submitted message</a>`);
+      }
+      const tid = Number(u.searchParams.get('t'));
+      const pid = nextPostId++;
+      topics.get(tid).posts.push({ id: pid, author: currentUser, body: params.get('message') });
+      return res.end(`<div id="p${pid}" class="post">Posted</div>`);
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  stub.listen(0, '127.0.0.1');
+  await once(stub, 'listening');
+  t.after(() => new Promise((resolve) => stub.close(resolve)));
+  const stubUrl = `http://127.0.0.1:${stub.address().port}`;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-elon-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const capturedFetcherOpts = [];
+  const fakeFetcher = async (opts) => {
+    capturedFetcherOpts.push(opts);
+    return {
+      fetchedAt: '2026-11-25T12:45:00Z',
+      sources: [{ source: 'X (@elonmusk)', ok: true, count: 1, status: 200 }],
+      items: elonRes.items,
+    };
+  };
+
+  const elonRun = await runPhpBbConversationRound({
+    forumUrl: stubUrl,
+    boardId: 5,
+    groupId: 9,
+    statePath: path.join(dir, 'phpbb-agents.json'),
+    dbPath: path.join(dir, 'forum-memory.db'),
+    fandomStatePath: path.join(dir, 'forum-fandoms.json'),
+    mode: 'elon',
+    maxSpeakers: 2,
+    speakerDelayMs: 0,
+    newsFetcher: fakeFetcher,
+    llm: createLlmProvider({ provider: 'mock' }),
+    clientFactory: () => new PhpBbClient({ baseUrl: stubUrl, formDelayMs: 0 }),
+  });
+
+  assert.equal(capturedFetcherOpts[0].includeX, true);
+  assert.equal(capturedFetcherOpts[0].elonOnly, true);
+  assert.equal(elonRun.newTopicId, 20);
+  assert.equal(elonRun.actions[0].id, 'elon-ai');
+  assert.equal(elonRun.actions[0].username, 'ElonAI');
+  assert.equal(elonRun.actions[0].action, 'created_news_topic');
+  assert.equal(elonRun.actions[1].action, 'replied');
+  assert.match(topics.get(20).posts[0].body, /https:\/\/x\.com\/elonmusk\/status\/99887766/);
+
+  const savedFandoms = loadFandomState(path.join(dir, 'forum-fandoms.json'));
+  assert.equal(savedFandoms.lastHostId, 'elon-ai');
+
+  // Next auto round right away (news NOT due yet) must pass includeX: false (credit-saver!)
+  await runPhpBbConversationRound({
+    forumUrl: stubUrl,
+    boardId: 5,
+    groupId: 9,
+    statePath: path.join(dir, 'phpbb-agents.json'),
+    dbPath: path.join(dir, 'forum-memory.db'),
+    fandomStatePath: path.join(dir, 'forum-fandoms.json'),
+    mode: 'auto',
+    newsTopicIntervalHours: 10,
+    maxSpeakers: 1,
+    speakerDelayMs: 0,
+    newsFetcher: fakeFetcher,
+    llm: createLlmProvider({ provider: 'mock' }),
+    clientFactory: () => new PhpBbClient({ baseUrl: stubUrl, formDelayMs: 0 }),
+  });
+  assert.equal(capturedFetcherOpts[1].includeX, false);
 });
