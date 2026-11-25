@@ -986,6 +986,27 @@ export class TavernStore {
     }
 
     const now = Date.now();
+    const normalizedConfidence = round4(validated.confidence);
+    const requestedConfidence =
+      typeof confidence === 'number' && Number.isFinite(confidence) ? confidence : 0.6;
+    const confidenceCapped = normalizedConfidence < requestedConfidence;
+    const sourceJson = JSON.stringify(validated.sourcePostIds);
+
+    const existingDup = this.db
+      .prepare(
+        `SELECT * FROM memories
+         WHERE character_id = ? AND kind = ? AND text = ? AND source_post_ids_json = ? AND status = 'active'
+         ORDER BY id DESC LIMIT 1`
+      )
+      .get(characterId, validated.kind, validated.text, sourceJson);
+    if (existingDup) {
+      return {
+        ...hydrateMemoryRow(existingDup),
+        deduplicated: true,
+        confidenceCapped,
+      };
+    }
+
     this.db.exec('BEGIN');
     try {
       const info = this.db
@@ -998,8 +1019,8 @@ export class TavernStore {
           characterId,
           validated.kind,
           validated.text,
-          JSON.stringify(validated.sourcePostIds),
-          round4(validated.confidence),
+          sourceJson,
+          normalizedConfidence,
           now
         );
       const memoryId = Number(info.lastInsertRowid);
@@ -1016,7 +1037,11 @@ export class TavernStore {
       }
 
       this.db.exec('COMMIT');
-      return hydrateMemoryRow(this.db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId));
+      return {
+        ...hydrateMemoryRow(this.db.prepare('SELECT * FROM memories WHERE id = ?').get(memoryId)),
+        deduplicated: false,
+        confidenceCapped,
+      };
     } catch (error) {
       this.db.exec('ROLLBACK');
       throw error;

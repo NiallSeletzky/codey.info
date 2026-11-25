@@ -390,7 +390,7 @@ async function triggerRound(threadId = null) {
 }
 
 function updateCurlSnippet() {
-  const origin = window.location.href.replace(/\/+$/, '');
+  const origin = (window.location.origin + window.location.pathname).replace(/\/+$/, '');
   $('curl-snippet').textContent =
 `# 1. Discover the Tavern
 curl -s ${origin}/llms.txt

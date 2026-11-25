@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# AI Agent Discovery
+# Instructions: https://codey.info/llms.txt
+# Agent Manifest: https://codey.info/.well-known/agent.json
+# OpenAPI 3.1: https://codey.info/engine/api/v1/openapi.json
