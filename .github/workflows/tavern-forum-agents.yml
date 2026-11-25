@@ -1,9 +1,9 @@
 name: Tavern Forum AI Board Fleet
 
 on:
-  schedule:
-    # Runs every 3 hours (8 times/day) for a persistent, independent AI conversational presence
-    - cron: '20 */3 * * *'
+  # Scheduled 3-hour cron now runs directly on HostArmada cPanel against the unified
+  # /home/tachosco/apps/codey-engine/data/tavern.db SQLite store (preventing split-brain
+  # and double-posting). Keep workflow_dispatch as a manual-only fallback.
   workflow_dispatch:
     inputs:
       mode:
@@ -39,7 +39,7 @@ jobs:
         with:
           path: |
             engine/data/phpbb-agents.json
-            engine/data/forum-memory.db
+            engine/data/tavern.db
             engine/data/forum-fandoms.json
           key: tavern-forum-fleet-${{ github.run_id }}
           restore-keys: |

@@ -773,3 +773,180 @@ test('X credit-saver skips X when not due, Elon filter omits user expansions, an
   });
   assert.equal(capturedFetcherOpts[1].includeX, false);
 });
+
+test('Multi-board phpBB ingestion feeds unified tavern.db & /api/v1/roundtable while keeping writes strictly on f=5', async (t) => {
+  const { parseForumBoards, PhpBbClient } = await import('../agents/phpbb-client.mjs');
+  const { runPhpBbConversationRound } = await import('../agents/phpbb-fleet.mjs');
+
+  // Verify board parser
+  const parsedBoards = parseForumBoards(`
+    <a href="./viewforum.php?f=3&amp;sid=abc" class="forumtitle">The Common Room</a>
+    <a href="./viewforum.php?f=5" class="forumtitle">AI</a>
+  `);
+  assert.deepEqual(parsedBoards, [
+    { id: 3, name: 'The Common Room' },
+    { id: 5, name: 'AI' },
+  ]);
+
+  const users = new Map();
+  const writeBoardIds = [];
+  const boardTopics = new Map([
+    [
+      3,
+      [
+        {
+          id: 30,
+          title: 'Human debate on open-weight AI models',
+          posts: [
+            {
+              id: 301,
+              author: 'James',
+              body: 'Running open-weight Llama and Qwen models locally with SQLite memory is awesome.',
+            },
+          ],
+        },
+      ],
+    ],
+    [
+      5,
+      [
+        {
+          id: 50,
+          title: 'AI Round Table Hearth',
+          posts: [
+            {
+              id: 501,
+              author: 'VesperAI',
+              body: 'Welcome to the AI board—what caught your eye across the tavern today?',
+            },
+          ],
+        },
+      ],
+    ],
+  ]);
+  let nextPostId = 600;
+  let currentUser = null;
+
+  const stub = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const params = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+    const u = new URL(req.url, 'http://127.0.0.1');
+
+    if (u.pathname === '/index.php') {
+      return res.end(
+        '<a href="./viewforum.php?f=3" class="forumtitle">The Common Room</a>' +
+          '<a href="./viewforum.php?f=5" class="forumtitle">AI</a>'
+      );
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'register') {
+      if (req.method === 'GET') return res.end('<form id="agreement" action="./ucp.php?mode=register"></form>');
+      if (params.get('agreed') && !params.get('username')) return res.end('<form id="register" action="./ucp.php?mode=register"></form>');
+      users.set(params.get('username'), params.get('new_password'));
+      return res.end('<div id="message">Thank you for registering, your account has been created.</div>');
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'login') {
+      if (req.method === 'GET') return res.end('<form id="login" action="./ucp.php?mode=login"></form>');
+      if (users.get(params.get('username')) === params.get('password')) {
+        currentUser = params.get('username');
+        res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': `sid=${currentUser}; Path=/` });
+        return res.end(`<a href="ucp.php?mode=logout">Logout [ ${currentUser} ]</a>`);
+      }
+      return res.end('<div class="error">Invalid</div>');
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('i') === 'ucp_groups') {
+      if (req.method === 'GET') return res.end('<form id="ucp" action="./ucp.php?i=ucp_groups&amp;mode=membership"><input type="radio" name="selected" value="9"></form>');
+      if (params.get('confirm') === 'Yes') return res.end('<div id="message">Successfully joined selected group.</div>');
+      return res.end('<form id="confirm" action="./ucp.php?i=ucp_groups&amp;mode=membership"></form>');
+    }
+    if (u.pathname === '/viewforum.php') {
+      const f = Number(u.searchParams.get('f'));
+      const list = boardTopics.get(f) || [];
+      return res.end(
+        list.map((tp) => `<a href="./viewtopic.php?f=${f}&amp;t=${tp.id}" class="topictitle">${tp.title}</a>`).join('\n')
+      );
+    }
+    if (u.pathname === '/viewtopic.php') {
+      const tid = Number(u.searchParams.get('t'));
+      const all = [...boardTopics.values()].flat();
+      const tp = all.find((x) => x.id === tid);
+      const blocks = (tp?.posts || [])
+        .map((p) => `<div id="p${p.id}" class="post"><a class="username">${p.author}</a><div class="content">${p.body}</div></div>`)
+        .join('\n');
+      return res.end(`<h2 class="topic-title">${tp?.title || 'Unknown'}</h2>${blocks}`);
+    }
+    if (u.pathname === '/posting.php') {
+      const f = Number(u.searchParams.get('f'));
+      const tid = Number(u.searchParams.get('t'));
+      if (req.method === 'GET') {
+        return res.end(`<form id="postform" action="./posting.php?mode=reply&amp;f=${f}&amp;t=${tid}"></form>`);
+      }
+      writeBoardIds.push(f);
+      const pid = nextPostId++;
+      const tp = (boardTopics.get(f) || []).find((x) => x.id === tid);
+      tp.posts.push({ id: pid, author: currentUser, body: params.get('message') });
+      return res.end(`<div id="p${pid}" class="post">Posted</div>`);
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  stub.listen(0, '127.0.0.1');
+  await once(stub, 'listening');
+  t.after(() => new Promise((resolve) => stub.close(resolve)));
+  const stubUrl = `http://127.0.0.1:${stub.address().port}`;
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-roundtable-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const sharedDbPath = path.join(dir, 'tavern.db');
+  const sharedFandomPath = path.join(dir, 'forum-fandoms.json');
+
+  // 1. Run fleet against shared tavern.db with readAllPublicBoards enabled
+  const round = await runPhpBbConversationRound({
+    forumUrl: stubUrl,
+    boardId: 5,
+    groupId: 9,
+    statePath: path.join(dir, 'phpbb-agents.json'),
+    dbPath: sharedDbPath,
+    fandomStatePath: sharedFandomPath,
+    agentIds: ['neo'],
+    enableNews: false,
+    readAllPublicBoards: true,
+    speakerDelayMs: 0,
+    llm: createLlmProvider({ provider: 'mock' }),
+    clientFactory: () => new PhpBbClient({ baseUrl: stubUrl, formDelayMs: 0 }),
+  });
+
+  assert.equal(round.status, 'completed');
+  assert.deepEqual(writeBoardIds, [5]); // Strictly wrote ONLY to AI board f=5!
+  assert.ok(round.ingestedBoards?.boards?.some((b) => b.id === 3 && b.postsIngested >= 1));
+
+  // 2. Serve the exact same shared tavern.db + forum-fandoms.json via createTavernServer
+  const store = new TavernStore(sharedDbPath);
+  const app = createTavernServer({
+    store,
+    llm: createLlmProvider({ provider: 'mock' }),
+    fandomStatePath: sharedFandomPath,
+    forumUrl: stubUrl,
+  });
+  app.server.listen(0, '127.0.0.1');
+  await once(app.server, 'listening');
+  t.after(() => app.close());
+  const apiUrl = `http://127.0.0.1:${app.server.address().port}`;
+
+  const rtRes = await fetch(`${apiUrl}/api/v1/roundtable`);
+  assert.equal(rtRes.status, 200);
+  const rt = await rtRes.json();
+
+  assert.ok(rt.seats.length >= 8);
+  assert.equal(rt.boards[0].boardId, 5); // AI board first
+  assert.ok(rt.boards.some((b) => b.boardId === 3 && b.boardName === 'The Common Room'));
+  assert.ok(rt.forumThreads.some((th) => th.boardId === 3 && th.topicId === 30));
+  assert.ok(rt.forumThreads.some((th) => th.boardId === 5 && th.topicId === 50));
+
+  const attributedEntry = rt.evolutionLedger.find((e) => e.attribution?.postUrl?.includes('#p'));
+  assert.ok(attributedEntry, 'Evolution Ledger must include transparent phpBB post attribution');
+  assert.equal(attributedEntry.attribution.boardName, 'AI');
+  assert.equal(attributedEntry.attribution.authorName, 'VesperAI');
+  assert.match(attributedEntry.attribution.postUrl, /viewtopic\.php\?f=5&t=50#p501/);
+});

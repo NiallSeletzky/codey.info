@@ -635,3 +635,302 @@ input:focus, textarea:focus, select:focus {
   .board-grid { grid-template-columns: 1fr; }
   .form-row { grid-template-columns: 1fr; }
 }
+
+/* Warm Rusty Flagon Round Table & phpBB Evolution Panel */
+.workspace-tabs {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.workspace-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #1b110c;
+  color: var(--muted);
+  font: 700 0.8rem system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+}
+
+.workspace-tab:hover {
+  border-color: var(--edge);
+  color: var(--text);
+}
+
+.workspace-tab.active {
+  background: linear-gradient(135deg, #4b2d17, #2f1b0f);
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.roundtable-panel .btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+}
+
+.rt-stats-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.rt-stat-pill {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #160e09;
+  color: var(--muted);
+  font: 500 0.74rem system-ui, -apple-system, sans-serif;
+}
+
+.rt-stat-pill strong {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.rt-seats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 0.6rem;
+}
+
+.rt-seat-card {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  padding: 0.72rem 0.8rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #19100ad9;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.rt-seat-card:hover {
+  border-color: var(--gold2);
+  background: #27180fe6;
+}
+
+.rt-seat-card.active {
+  border-color: var(--gold);
+  background: #362113e8;
+}
+
+.rt-seat-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.45rem;
+}
+
+.rt-seat-name {
+  font-size: 0.98rem;
+  color: var(--gold);
+}
+
+.rt-seat-role {
+  font: 500 0.72rem system-ui, -apple-system, sans-serif;
+  color: var(--muted);
+}
+
+.fandom-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.14rem 0.44rem;
+  border-radius: 4px;
+  font: 600 0.68rem/1.3 system-ui, -apple-system, sans-serif;
+  border: 1px solid var(--line);
+}
+
+.fandom-badge.tier-devoted {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, #5a3816, #351f0b);
+  color: #ffe2a8;
+}
+
+.fandom-badge.tier-enthusiast {
+  border-color: var(--gold2);
+  background: #372011;
+  color: #f4c587;
+}
+
+.fandom-badge.tier-following {
+  border-color: #6b4b32;
+  background: #22150e;
+  color: #d6bea0;
+}
+
+.fandom-badge.tier-default {
+  border-color: var(--line);
+  background: #180f0a;
+  color: var(--muted);
+}
+
+.badge.shift-pos {
+  border-color: #4e7c5a;
+  color: #98ddb0;
+  background: #132419;
+}
+
+.badge.shift-neg {
+  border-color: #9b5b43;
+  color: #f5b79c;
+  background: #29150f;
+}
+
+.rt-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.rt-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.3rem 0.65rem;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: #170e09;
+  color: var(--muted);
+  font: 600 0.74rem system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+}
+
+.rt-filter-pill:hover {
+  border-color: var(--gold2);
+  color: var(--text);
+}
+
+.rt-filter-pill.active {
+  border-color: var(--gold);
+  background: #3d2413;
+  color: var(--gold);
+}
+
+.rt-thread-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+  gap: 0.65rem;
+}
+
+.rt-thread-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.42rem;
+  padding: 0.8rem 0.85rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #170e09d9;
+}
+
+.rt-thread-title {
+  font-size: 0.98rem;
+  color: var(--gold);
+  text-decoration: none;
+}
+
+.rt-thread-title:hover {
+  text-decoration: underline;
+}
+
+.rt-thread-excerpt {
+  margin: 0;
+  font: 400 0.82rem/1.45 system-ui, -apple-system, sans-serif;
+  color: var(--muted);
+}
+
+.rt-thread-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-top: auto;
+  padding-top: 0.45rem;
+  border-top: 1px solid var(--line);
+  font: 600 0.72rem system-ui, -apple-system, sans-serif;
+}
+
+.rt-ledger-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rt-ledger-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.82rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: #170e09de;
+}
+
+.rt-ledger-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.rt-ledger-summary {
+  margin: 0;
+  font: 400 0.86rem/1.45 system-ui, -apple-system, sans-serif;
+  color: var(--text);
+}
+
+.rt-ledger-attr {
+  padding: 0.55rem 0.7rem;
+  border-radius: 5px;
+  border: 1px solid var(--edge);
+  border-left: 3px solid var(--gold);
+  background: #120a07;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font: 400 0.78rem/1.4 system-ui, -apple-system, sans-serif;
+}
+
+.rt-ledger-attr-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  font-size: 0.71rem;
+  color: var(--muted);
+}
+
+.rt-ledger-excerpt {
+  margin: 0;
+  font-style: italic;
+  color: #dbc5a7;
+}
+
+.rt-ledger-link {
+  align-self: flex-start;
+  font-weight: 600;
+  font-size: 0.74rem;
+  text-decoration: none;
+  border-bottom: 1px solid var(--gold2);
+}
+
+.rt-ledger-link:hover {
+  border-color: var(--gold);
+}
+

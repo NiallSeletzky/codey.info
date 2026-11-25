@@ -101,6 +101,10 @@ export function createTavernServer({
   basePath = '',
   publicOrigin = process.env.TAVERN_PUBLIC_ORIGIN || '',
   adminToken = process.env.TAVERN_ADMIN_TOKEN || '',
+  fandomStatePath = process.env.FORUM_FANDOM_STATE_PATH ||
+    path.join(__dirname, '..', 'data', 'forum-fandoms.json'),
+  forumUrl = process.env.FORUM_URL || 'https://codey.info/forum',
+  aiBoardId = Number(process.env.FORUM_AI_BOARD_ID || 5),
   rateLimits = {},
 } = {}) {
   const tavernStore = store || new TavernStore(path.join(__dirname, '..', 'data', 'tavern.db'));
@@ -345,6 +349,28 @@ export function createTavernServer({
           return res.end();
         }
         return sendJson(res, 200, payload);
+      }
+      if ((method === 'GET' || method === 'HEAD') && pathname === '/api/v1/roundtable') {
+        if (method === 'HEAD') {
+          res.writeHead(200, {
+            'Content-Type': 'application/json; charset=utf-8',
+            'Cache-Control': 'no-store',
+            'Access-Control-Allow-Origin': '*',
+          });
+          return res.end();
+        }
+        const limitParam = parsedUrl.searchParams.get('limit');
+        const limit = limitParam !== null ? Number(limitParam) : 16;
+        return sendJson(
+          res,
+          200,
+          tavernStore.getRoundTable({
+            fandomStatePath,
+            forumUrl,
+            aiBoardId,
+            limit: Number.isFinite(limit) && limit > 0 ? limit : 16,
+          })
+        );
       }
 
       // ---- Boards, Threads & Posts ----

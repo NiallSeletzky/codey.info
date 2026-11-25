@@ -88,6 +88,27 @@ function extractMessages(htmlDoc) {
   return messages;
 }
 
+export function parseForumBoards(htmlDoc) {
+  const boards = [];
+  const seen = new Set();
+  for (const m of String(htmlDoc || '').matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/gi)) {
+    const attrs = m[1];
+    if (!/\bclass=["'][^"']*\bforumtitle\b[^"']*["']/i.test(attrs)) continue;
+    const hrefMatch = attrs.match(/\bhref=["']([^"']+)["']/i);
+    if (!hrefMatch) continue;
+    const href = decodeHtmlEntities(hrefMatch[1]);
+    const fMatch = href.match(/viewforum\.php\?(?:[^#]*&)?f=(\d+)/i);
+    if (!fMatch) continue;
+    const id = Number(fMatch[1]);
+    if (!Number.isSafeInteger(id) || id < 1 || seen.has(id)) continue;
+    const name = stripHtml(m[2]);
+    if (!name) continue;
+    seen.add(id);
+    boards.push({ id, name });
+  }
+  return boards;
+}
+
 export function parseForumTopics(htmlDoc) {
   const topics = [];
   const seen = new Set();
@@ -346,6 +367,11 @@ export class PhpBbClient {
       /successfully joined|already a member/i.test(m)
     );
     return { ok: joined, messages };
+  }
+
+  async listPublicBoards() {
+    const res = await this.request('index.php');
+    return parseForumBoards(res.html);
   }
 
   async listTopics(boardId) {

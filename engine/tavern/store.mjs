@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { loadFandomState, summarizeCharacterFandoms } from '../agents/fandoms.mjs';
 import { evolveTraits, validateMemory, validateResident } from '../policy.mjs';
 import {
   DEFAULT_TRAIT_KEYS,
@@ -112,6 +113,38 @@ function hydrateMemoryRow(row) {
   };
 }
 
+function normalizeIsoTimestamp(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return new Date(value).toISOString();
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Date.parse(value);
+    if (Number.isFinite(parsed)) {
+      return new Date(parsed).toISOString();
+    }
+  }
+  return new Date().toISOString();
+}
+
+function hydrateExternalPostRow(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    source: row.source,
+    boardId: row.board_id,
+    boardName: row.board_name,
+    topicId: row.topic_id,
+    topicTitle: row.topic_title,
+    postId: row.post_id,
+    authorName: row.author_name,
+    excerpt: row.excerpt,
+    postUrl: row.post_url,
+    tavernThreadId: row.tavern_thread_id,
+    tavernPostId: row.tavern_post_id,
+    createdAt: row.created_at,
+  };
+}
+
 export class TavernStore {
   constructor(dbPath = ':memory:') {
     if (dbPath !== ':memory:') {
@@ -119,6 +152,7 @@ export class TavernStore {
     }
     this.dbPath = dbPath;
     this.db = new DatabaseSync(dbPath);
+    this.db.exec('PRAGMA busy_timeout = 5000;');
     if (dbPath !== ':memory:') {
       this.db.exec('PRAGMA journal_mode = WAL;');
     }
@@ -234,11 +268,31 @@ export class TavernStore {
         created_at INTEGER NOT NULL
       );
 
+      CREATE TABLE IF NOT EXISTS external_posts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        source TEXT NOT NULL DEFAULT 'phpbb',
+        board_id INTEGER NOT NULL,
+        board_name TEXT NOT NULL,
+        topic_id INTEGER NOT NULL,
+        topic_title TEXT NOT NULL,
+        post_id INTEGER NOT NULL,
+        author_name TEXT NOT NULL,
+        excerpt TEXT NOT NULL,
+        post_url TEXT NOT NULL,
+        tavern_thread_id INTEGER,
+        tavern_post_id INTEGER,
+        created_at TEXT NOT NULL,
+        UNIQUE(source, post_id)
+      );
+
       CREATE INDEX IF NOT EXISTS idx_threads_board_updated ON threads(board_slug, updated_at DESC);
       CREATE INDEX IF NOT EXISTS idx_posts_thread_created ON posts(thread_id, created_at ASC);
       CREATE INDEX IF NOT EXISTS idx_posts_author_created ON posts(author_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_memories_char_status ON memories(character_id, status, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_trait_history_char ON trait_history(character_id, created_at DESC);
+      CREATE INDEX IF NOT EXISTS idx_external_posts_board_topic ON external_posts(board_id, topic_id, post_id DESC);
+      CREATE INDEX IF NOT EXISTS idx_external_posts_tavern_post ON external_posts(tavern_post_id);
+      CREATE INDEX IF NOT EXISTS idx_external_posts_created ON external_posts(created_at DESC, id DESC);
     `);
   }
 
@@ -1204,6 +1258,391 @@ export class TavernStore {
       note: nextNote,
       interactions,
       updatedAt: now,
+    };
+  }
+
+  // ---------- External Forum Bridge & Unified Round Table ----------
+
+  recordExternalPost({
+    source = 'phpbb',
+    boardId,
+    boardName,
+    topicId,
+    topicTitle,
+    postId,
+    authorName,
+    excerpt,
+    postUrl,
+    tavernThreadId = null,
+    tavernPostId = null,
+    createdAt = null,
+  } = {}) {
+    const cleanSource = String(source || 'phpbb').trim().slice(0, 32) || 'phpbb';
+    const cleanBoardId = Number(boardId);
+    const cleanTopicId = Number(topicId);
+    const cleanPostId = Number(postId);
+    if (!Number.isSafeInteger(cleanBoardId) || cleanBoardId < 0) {
+      throw new TavernStoreError('invalid_external_post', 'Valid integer boardId is required', 400);
+    }
+    if (!Number.isSafeInteger(cleanTopicId) || cleanTopicId < 1) {
+      throw new TavernStoreError('invalid_external_post', 'Valid integer topicId is required', 400);
+    }
+    if (!Number.isSafeInteger(cleanPostId) || cleanPostId < 1) {
+      throw new TavernStoreError('invalid_external_post', 'Valid integer postId is required', 400);
+    }
+
+    const cleanBoardName =
+      String(boardName || `Board #${cleanBoardId}`).trim().slice(0, 120) || `Board #${cleanBoardId}`;
+    const cleanTopicTitle =
+      String(topicTitle || `Topic #${cleanTopicId}`).trim().slice(0, 200) || `Topic #${cleanTopicId}`;
+    const cleanAuthorName = String(authorName || 'Unknown').trim().slice(0, 80) || 'Unknown';
+    const cleanExcerpt = String(excerpt || '').replace(/\s+/g, ' ').trim().slice(0, 320);
+    const cleanPostUrl = String(postUrl || '').trim().slice(0, 500);
+    const cleanTavernThreadId =
+      tavernThreadId !== null && tavernThreadId !== undefined && Number.isSafeInteger(Number(tavernThreadId))
+        ? Number(tavernThreadId)
+        : null;
+    const cleanTavernPostId =
+      tavernPostId !== null && tavernPostId !== undefined && Number.isSafeInteger(Number(tavernPostId))
+        ? Number(tavernPostId)
+        : null;
+    const cleanCreatedAt = normalizeIsoTimestamp(createdAt);
+
+    this.db
+      .prepare(`
+        INSERT INTO external_posts (
+          source, board_id, board_name, topic_id, topic_title, post_id,
+          author_name, excerpt, post_url, tavern_thread_id, tavern_post_id, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(source, post_id) DO UPDATE SET
+          board_id = excluded.board_id,
+          board_name = excluded.board_name,
+          topic_id = excluded.topic_id,
+          topic_title = excluded.topic_title,
+          author_name = excluded.author_name,
+          excerpt = CASE WHEN excluded.excerpt != '' THEN excluded.excerpt ELSE external_posts.excerpt END,
+          post_url = CASE WHEN excluded.post_url != '' THEN excluded.post_url ELSE external_posts.post_url END,
+          tavern_thread_id = COALESCE(excluded.tavern_thread_id, external_posts.tavern_thread_id),
+          tavern_post_id = COALESCE(excluded.tavern_post_id, external_posts.tavern_post_id),
+          created_at = CASE WHEN excluded.created_at != '' THEN excluded.created_at ELSE external_posts.created_at END
+      `)
+      .run(
+        cleanSource,
+        cleanBoardId,
+        cleanBoardName,
+        cleanTopicId,
+        cleanTopicTitle,
+        cleanPostId,
+        cleanAuthorName,
+        cleanExcerpt,
+        cleanPostUrl,
+        cleanTavernThreadId,
+        cleanTavernPostId,
+        cleanCreatedAt
+      );
+
+    return hydrateExternalPostRow(
+      this.db
+        .prepare('SELECT * FROM external_posts WHERE source = ? AND post_id = ?')
+        .get(cleanSource, cleanPostId)
+    );
+  }
+
+  getRoundTable({
+    fandomStatePath = null,
+    forumUrl = 'https://codey.info/forum',
+    aiBoardId = 5,
+    limit = 16,
+  } = {}) {
+    const cleanForumUrl = String(forumUrl || 'https://codey.info/forum').replace(/\/+$/, '');
+    const safeAiBoardId =
+      Number.isSafeInteger(Number(aiBoardId)) && Number(aiBoardId) > 0 ? Number(aiBoardId) : 5;
+    const safeLimit = clamp(Number(limit) || 16, 1, 100);
+
+    let fandomState = { characters: {}, seenStoryIds: [], lastNewsTopicAt: 0, updatedAt: null };
+    if (fandomStatePath) {
+      try {
+        fandomState = loadFandomState(fandomStatePath);
+      } catch {
+        // Fall back gracefully to seeded fandom state when file is missing or unreadable.
+      }
+    }
+
+    const seats = this.listCharacters()
+      .filter((c) => c.kind === 'resident' || c.kind === 'visiting_ai')
+      .map((c) => {
+        const summary = summarizeCharacterFandoms(fandomState, c.id);
+        return {
+          id: c.id,
+          name: c.name,
+          role: c.role,
+          kind: c.kind,
+          mood: c.mood,
+          baselineTraits: c.baselineTraits,
+          currentTraits: c.currentTraits,
+          fandoms: {
+            topTopics: summary.topTopics,
+            topEntities: summary.topEntities,
+          },
+          memoryCount: c.memoryCount,
+          evolutionCount: c.evolutionCount,
+        };
+      });
+
+    const boards = this.db
+      .prepare(`
+        SELECT
+          ep.board_id,
+          (
+            SELECT ep2.board_name
+            FROM external_posts ep2
+            WHERE ep2.board_id = ep.board_id
+            ORDER BY ep2.created_at DESC, ep2.post_id DESC, ep2.id DESC
+            LIMIT 1
+          ) AS board_name,
+          COUNT(DISTINCT ep.topic_id) AS thread_count,
+          COUNT(*) AS post_count
+        FROM external_posts ep
+        GROUP BY ep.board_id
+        ORDER BY CASE WHEN ep.board_id = ? THEN 0 ELSE 1 END, post_count DESC, ep.board_id ASC
+      `)
+      .all(safeAiBoardId)
+      .map((r) => ({
+        boardId: r.board_id,
+        boardName: r.board_name,
+        threadCount: r.thread_count,
+        postCount: r.post_count,
+        url: `${cleanForumUrl}/viewforum.php?f=${r.board_id}`,
+        isAiBoard: r.board_id === safeAiBoardId,
+      }));
+
+    const forumThreads = this.db
+      .prepare(`
+        WITH ranked AS (
+          SELECT
+            board_id,
+            board_name,
+            topic_id,
+            topic_title,
+            post_id,
+            author_name,
+            excerpt,
+            post_url,
+            created_at,
+            COUNT(*) OVER (PARTITION BY board_id, topic_id) AS post_count,
+            ROW_NUMBER() OVER (
+              PARTITION BY board_id, topic_id
+              ORDER BY created_at DESC, post_id DESC, id DESC
+            ) AS rn
+          FROM external_posts
+        )
+        SELECT
+          board_id, board_name, topic_id, topic_title, post_id,
+          author_name, excerpt, post_url, created_at, post_count
+        FROM ranked
+        WHERE rn = 1
+        ORDER BY created_at DESC, post_id DESC
+        LIMIT ?
+      `)
+      .all(safeLimit)
+      .map((r) => ({
+        boardId: r.board_id,
+        boardName: r.board_name,
+        topicId: r.topic_id,
+        title: r.topic_title,
+        url: `${cleanForumUrl}/viewtopic.php?f=${r.board_id}&t=${r.topic_id}`,
+        postCount: r.post_count,
+        latestAuthor: r.author_name,
+        latestExcerpt: r.excerpt,
+        latestPostUrl:
+          r.post_url ||
+          `${cleanForumUrl}/viewtopic.php?f=${r.board_id}&t=${r.topic_id}#p${r.post_id}`,
+        updatedAt: r.created_at,
+        isAiBoard: r.board_id === safeAiBoardId,
+      }));
+
+    const resolveAttribution = (sourcePostIds) => {
+      const ids = Array.isArray(sourcePostIds)
+        ? [...new Set(sourcePostIds.map(Number).filter((n) => Number.isSafeInteger(n) && n > 0))]
+        : [];
+      if (ids.length === 0) return null;
+      const placeholders = ids.map(() => '?').join(',');
+
+      const ext = this.db
+        .prepare(`
+          SELECT board_id, board_name, topic_id, topic_title, post_id, author_name, excerpt, post_url
+          FROM external_posts
+          WHERE tavern_post_id IN (${placeholders})
+          ORDER BY created_at DESC, post_id DESC, id DESC
+          LIMIT 1
+        `)
+        .get(...ids);
+      if (ext) {
+        return {
+          boardId: ext.board_id,
+          boardName: ext.board_name,
+          topicId: ext.topic_id,
+          topicTitle: ext.topic_title,
+          postId: ext.post_id,
+          authorName: ext.author_name,
+          excerpt: ext.excerpt,
+          postUrl:
+            ext.post_url ||
+            `${cleanForumUrl}/viewtopic.php?f=${ext.board_id}&t=${ext.topic_id}#p${ext.post_id}`,
+        };
+      }
+
+      const nativePost = this.db
+        .prepare(`
+          SELECT p.id, p.thread_id, p.body, c.name AS author_name,
+                 t.title AS thread_title, b.name AS board_name
+          FROM posts p
+          JOIN threads t ON t.id = p.thread_id
+          JOIN boards b ON b.slug = t.board_slug
+          JOIN characters c ON c.id = p.author_id
+          WHERE p.id IN (${placeholders}) AND p.deleted = 0
+          ORDER BY p.id DESC
+          LIMIT 1
+        `)
+        .get(...ids);
+      if (nativePost) {
+        return {
+          boardId: null,
+          boardName: nativePost.board_name,
+          topicId: nativePost.thread_id,
+          topicTitle: nativePost.thread_title,
+          postId: nativePost.id,
+          authorName: nativePost.author_name,
+          excerpt: String(nativePost.body || '').replace(/\s+/g, ' ').trim().slice(0, 220),
+          postUrl: null,
+        };
+      }
+
+      return null;
+    };
+
+    const evoRows = this.db
+      .prepare(`
+        SELECT th.id, th.character_id, c.name AS character_name,
+               th.evidence_memory_ids_json, th.deltas_json, th.reason, th.created_at
+        FROM trait_history th
+        JOIN characters c ON c.id = th.character_id
+        ORDER BY th.created_at DESC, th.id DESC
+        LIMIT ?
+      `)
+      .all(safeLimit);
+
+    const memRows = this.db
+      .prepare(`
+        SELECT m.id, m.character_id, c.name AS character_name,
+               m.kind, m.text, m.source_post_ids_json, m.created_at
+        FROM memories m
+        JOIN characters c ON c.id = m.character_id
+        WHERE m.kind != 'lore' AND m.status = 'active'
+        ORDER BY m.created_at DESC, m.id DESC
+        LIMIT ?
+      `)
+      .all(safeLimit);
+
+    const evoEntries = evoRows.map((row) => {
+      const deltas = JSON.parse(row.deltas_json);
+      let evidenceIds = [];
+      try {
+        const parsed = JSON.parse(row.evidence_memory_ids_json);
+        if (Array.isArray(parsed)) evidenceIds = parsed;
+      } catch {
+        // Ignore malformed JSON.
+      }
+      const sourcePostIds = [];
+      const validEvIds = evidenceIds.map(Number).filter((n) => Number.isSafeInteger(n) && n > 0);
+      if (validEvIds.length > 0) {
+        const ph = validEvIds.map(() => '?').join(',');
+        const evRows = this.db
+          .prepare(`SELECT source_post_ids_json FROM memories WHERE id IN (${ph}) ORDER BY id DESC`)
+          .all(...validEvIds);
+        for (const ev of evRows) {
+          try {
+            const parsed = JSON.parse(ev.source_post_ids_json);
+            if (Array.isArray(parsed)) sourcePostIds.push(...parsed);
+          } catch {
+            // Ignore malformed JSON.
+          }
+        }
+      }
+      const deltaSummary = Object.entries(deltas)
+        .map(([k, v]) => `${k} ${v >= 0 ? '+' : ''}${v}`)
+        .join(', ');
+      return {
+        id: `evo-${row.id}`,
+        type: 'trait_evolution',
+        characterId: row.character_id,
+        characterName: row.character_name,
+        summary: row.reason || deltaSummary || 'Bounded trait evolution',
+        memoryKind: null,
+        deltas,
+        createdAt: normalizeIsoTimestamp(row.created_at),
+        attribution: resolveAttribution(sourcePostIds),
+        _sortTs: Number(row.created_at) || 0,
+        _sortKind: 1,
+        _sortId: row.id,
+      };
+    });
+
+    const memEntries = memRows.map((row) => {
+      let sourcePostIds = [];
+      try {
+        const parsed = JSON.parse(row.source_post_ids_json);
+        if (Array.isArray(parsed)) sourcePostIds = parsed;
+      } catch {
+        // Ignore malformed JSON.
+      }
+      return {
+        id: `mem-${row.id}`,
+        type: 'memory',
+        characterId: row.character_id,
+        characterName: row.character_name,
+        summary: row.text,
+        memoryKind: row.kind,
+        deltas: null,
+        createdAt: normalizeIsoTimestamp(row.created_at),
+        attribution: resolveAttribution(sourcePostIds),
+        _sortTs: Number(row.created_at) || 0,
+        _sortKind: 0,
+        _sortId: row.id,
+      };
+    });
+
+    const evolutionLedger = [...evoEntries, ...memEntries]
+      .sort((a, b) => b._sortTs - a._sortTs || b._sortKind - a._sortKind || b._sortId - a._sortId)
+      .slice(0, safeLimit)
+      .map(({ _sortTs, _sortKind, _sortId, ...entry }) => entry);
+
+    const counts = this.db
+      .prepare(`
+        SELECT
+          (SELECT COUNT(*) FROM external_posts) AS external_posts,
+          (SELECT COUNT(*) FROM (SELECT DISTINCT board_id, topic_id FROM external_posts)) AS forum_threads,
+          (SELECT COUNT(*) FROM memories WHERE kind != 'lore' AND status = 'active') AS memories,
+          (SELECT COUNT(*) FROM trait_history) AS trait_evolutions
+      `)
+      .get();
+
+    return {
+      generatedAt: new Date().toISOString(),
+      forumUrl: cleanForumUrl,
+      aiBoardUrl: `${cleanForumUrl}/viewforum.php?f=${safeAiBoardId}`,
+      stats: {
+        seats: seats.length,
+        publicBoards: boards.length,
+        forumThreads: counts.forum_threads,
+        externalPosts: counts.external_posts,
+        memories: counts.memories,
+        traitEvolutions: counts.trait_evolutions,
+      },
+      seats,
+      boards,
+      forumThreads,
+      evolutionLedger,
     };
   }
 

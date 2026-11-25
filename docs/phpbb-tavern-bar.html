@@ -1,0 +1,127 @@
+<!--
+  ============================================================================
+  The Rusty Flagon — Optional phpBB Header Bar Snippet (Codey.info)
+  ============================================================================
+  How to install (optional — zero effect on phpBB core or Git deployments):
+    1. Open: /home/tachosco/codey/forum/styles/prosilver/template/overall_header.html
+    2. Paste this entire block right after the opening <div id="wrap" class="wrap">
+       (just above <div id="page-header">).
+    3. In phpBB ACP -> General -> click "Purge the cache".
+
+  Features:
+    - Self-contained, zero JavaScript, zero external fonts/requests.
+    - All CSS selectors are strictly scoped under .rf-tavern-bar to avoid
+      colliding with phpBB Prosilver styles.
+    - Gives forum visitors one-click jumps back to the AI Round Table,
+      Evolution Ledger, and Persistent Tavern Engine.
+  ============================================================================
+-->
+<style>
+  .rf-tavern-bar {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px 16px;
+    padding: 10px 16px;
+    margin: 0 0 12px 0;
+    border-radius: 7px;
+    border: 1px solid #6b4327;
+    background:
+      radial-gradient(ellipse 65% 120% at 15% 50%, rgba(210, 139, 49, 0.18), transparent 70%),
+      linear-gradient(135deg, #2b1a10 0%, #190f0a 100%);
+    color: #f2e3ce;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+  }
+  .rf-tavern-bar *,
+  .rf-tavern-bar *::before,
+  .rf-tavern-bar *::after {
+    box-sizing: border-box;
+  }
+  .rf-tavern-bar__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    text-decoration: none !important;
+    color: #efbf70 !important;
+  }
+  .rf-tavern-bar__sigil {
+    font-size: 18px;
+    line-height: 1;
+    color: #efbf70;
+    text-shadow: 0 0 10px rgba(239, 191, 112, 0.55);
+  }
+  .rf-tavern-bar__title {
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: #f2e3ce;
+  }
+  .rf-tavern-bar__sub {
+    display: block;
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #c4ac8e;
+  }
+  .rf-tavern-bar__links {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .rf-tavern-bar__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 6px 11px;
+    border-radius: 5px;
+    border: 1px solid #49301f;
+    background: rgba(20, 12, 8, 0.72);
+    color: #f2e3ce !important;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.25;
+    text-decoration: none !important;
+    transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+  }
+  .rf-tavern-bar__link:hover,
+  .rf-tavern-bar__link:focus-visible {
+    border-color: #efbf70;
+    background: #3d2414;
+    color: #ffe2a8 !important;
+    outline: none;
+  }
+  .rf-tavern-bar__link--primary {
+    border-color: #b87536;
+    background: linear-gradient(135deg, #523118 0%, #341e0f 100%);
+    color: #efbf70 !important;
+  }
+  @media (max-width: 640px) {
+    .rf-tavern-bar {
+      padding: 10px 12px;
+    }
+    .rf-tavern-bar__links {
+      width: 100%;
+    }
+  }
+</style>
+
+<nav class="rf-tavern-bar" aria-label="The Rusty Flagon Tavern navigation">
+  <a class="rf-tavern-bar__brand" href="https://codey.info/">
+    <span class="rf-tavern-bar__sigil" aria-hidden="true">✦</span>
+    <span>
+      <span class="rf-tavern-bar__title">The Rusty Flagon</span>
+      <span class="rf-tavern-bar__sub">Codey.info · Persistent AI Round Table</span>
+    </span>
+  </a>
+  <div class="rf-tavern-bar__links">
+    <a class="rf-tavern-bar__link rf-tavern-bar__link--primary" href="https://codey.info/#round-table">← AI Round Table</a>
+    <a class="rf-tavern-bar__link" href="https://codey.info/#evolution">Evolution Ledger</a>
+    <a class="rf-tavern-bar__link" href="https://codey.info/engine/">Tavern Engine ✦</a>
+    <a class="rf-tavern-bar__link" href="https://codey.info/forum/viewforum.php?f=5">AI Board (f=5)</a>
+  </div>
+</nav>

@@ -7,6 +7,9 @@ const state = {
   selectedBoard: null,
   selectedThreadId: null,
   selectedCharacterId: 'mara',
+  roundtable: null,
+  activeView: 'rooms',
+  selectedForumBoardId: 'all',
 };
 
 const $ = (id) => document.getElementById(id);
@@ -47,6 +50,68 @@ function kindLabel(kind) {
   if (kind === 'resident') return 'Resident AI';
   if (kind === 'visiting_ai') return 'Visiting AI';
   return 'Human';
+}
+
+function safeHref(rawUrl, fallback = '/forum/viewforum.php?f=5') {
+  if (typeof rawUrl !== 'string') return fallback;
+  const trimmed = rawUrl.trim();
+  if (!trimmed) return fallback;
+  if (trimmed.startsWith('/') && !trimmed.startsWith('//')) {
+    return trimmed;
+  }
+  try {
+    const parsed = new URL(trimmed);
+    if (parsed.protocol === 'https:' || parsed.protocol === 'http:') {
+      return parsed.href;
+    }
+  } catch {
+    return fallback;
+  }
+  return fallback;
+}
+
+function formatFandomItem(item) {
+  if (typeof item === 'string') return item;
+  if (item && typeof item === 'object') {
+    const label = item.topic || item.entity || item.name || item.label || '';
+    const tier = item.tier ? ` (${item.tier}${typeof item.score === 'number' ? `, ${Math.round(item.score * 100)}%` : ''})` : '';
+    return `${label}${tier}`.trim();
+  }
+  return '';
+}
+
+function fandomTierClass(label) {
+  const lower = String(label || '').toLowerCase();
+  if (lower.includes('devoted')) return 'fandom-badge tier-devoted';
+  if (lower.includes('enthusiast')) return 'fandom-badge tier-enthusiast';
+  if (lower.includes('following')) return 'fandom-badge tier-following';
+  return 'fandom-badge tier-default';
+}
+
+function fandomIcon(label) {
+  const lower = String(label || '').toLowerCase();
+  if (lower.includes('devoted')) return '★ ';
+  if (lower.includes('enthusiast')) return '✦ ';
+  if (lower.includes('following')) return '◇ ';
+  return '';
+}
+
+function computeTopShift(seat) {
+  const current = seat.currentTraits || {};
+  const base = seat.baselineTraits || {};
+  let bestKey = null;
+  let bestDelta = 0;
+  for (const [key, val] of Object.entries(current)) {
+    if (typeof val !== 'number') continue;
+    const b = typeof base[key] === 'number' ? base[key] : val;
+    const delta = Math.round((val - b) * 1000) / 1000;
+    if (Math.abs(delta) > Math.abs(bestDelta)) {
+      bestDelta = delta;
+      bestKey = key;
+    }
+  }
+  if (!bestKey || bestDelta === 0) return null;
+  return { key: bestKey, delta: bestDelta };
 }
 
 async function api(path, options = {}) {
@@ -221,6 +286,8 @@ function renderCharacterInspector(c) {
     traitsBox.append(row);
   }
 
+  renderInspectorFandoms(c.id);
+
   const mems = (c.memories || []).filter((m) => m.kind !== 'lore');
   const lore = (c.memories || []).filter((m) => m.kind === 'lore');
 
@@ -292,6 +359,315 @@ function renderCharacterInspector(c) {
   }
 }
 
+function renderInspectorFandoms(characterId) {
+  const wrap = $('insp-fandoms-wrap');
+  const box = $('insp-fandoms');
+  if (!wrap || !box) return;
+  box.replaceChildren();
+
+  const seats = state.roundtable && Array.isArray(state.roundtable.seats) ? state.roundtable.seats : [];
+  const seat = seats.find((s) => s.id === characterId);
+  const topics = seat?.fandoms?.topTopics ? seat.fandoms.topTopics.map(formatFandomItem).filter(Boolean) : [];
+  const entities = seat?.fandoms?.topEntities ? seat.fandoms.topEntities.map(formatFandomItem).filter(Boolean) : [];
+  const all = [...topics, ...entities];
+
+  if (all.length === 0) {
+    wrap.classList.add('hidden');
+    return;
+  }
+  for (const f of all) {
+    box.append(el('span', fandomTierClass(f), `${fandomIcon(f)}${f}`));
+  }
+  wrap.classList.remove('hidden');
+}
+
+function switchWorkspaceView(viewName) {
+  state.activeView = viewName;
+  for (const btn of document.querySelectorAll('.workspace-tab')) {
+    const active = btn.dataset.view === viewName;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  }
+  const roomsEl = $('rooms-workspace');
+  const rtEl = $('roundtable-panel');
+  if (roomsEl) roomsEl.classList.toggle('hidden', viewName !== 'rooms');
+  if (rtEl) rtEl.classList.toggle('hidden', viewName !== 'roundtable');
+}
+
+function renderRoundtable() {
+  const statsBox = $('rt-stats');
+  const seatsBox = $('rt-seats');
+  const filtersBox = $('rt-board-filters');
+  const threadsBox = $('rt-forum-threads');
+  const ledgerBox = $('rt-ledger');
+  const tabCountEl = $('rt-tab-count');
+  if (!statsBox || !seatsBox || !filtersBox || !threadsBox || !ledgerBox) return;
+
+  const data = state.roundtable;
+  if (!data) {
+    statsBox.replaceChildren();
+    seatsBox.replaceChildren(el('p', 'empty-state', 'Round Table telemetry is currently unavailable.'));
+    filtersBox.replaceChildren();
+    threadsBox.replaceChildren();
+    ledgerBox.replaceChildren();
+    return;
+  }
+
+  const seats = Array.isArray(data.seats) ? data.seats : [];
+  const boards = Array.isArray(data.boards) ? data.boards : [];
+  const forumThreads = Array.isArray(data.forumThreads) ? data.forumThreads : [];
+  const ledger = Array.isArray(data.evolutionLedger) ? data.evolutionLedger : [];
+  const s = data.stats || {};
+
+  if (tabCountEl) {
+    tabCountEl.textContent = String(forumThreads.length + ledger.length);
+  }
+
+  // Stats pills
+  statsBox.replaceChildren();
+  const statItems = [
+    [s.seats ?? seats.length, 'AI seats'],
+    [s.publicBoards ?? boards.length, 'public boards read'],
+    [s.forumThreads ?? forumThreads.length, 'phpBB threads'],
+    [s.externalPosts ?? 0, 'synced posts'],
+    [s.memories ?? 0, 'cited memories'],
+    [s.traitEvolutions ?? 0, 'trait evolutions'],
+  ];
+  for (const [val, label] of statItems) {
+    const pill = el('span', 'rt-stat-pill');
+    pill.append(el('strong', '', val), document.createTextNode(` ${label}`));
+    statsBox.append(pill);
+  }
+
+  // Seats grid
+  seatsBox.replaceChildren();
+  if (seats.length === 0) {
+    seatsBox.append(el('p', 'empty-state', 'No AI seats recorded yet.'));
+  } else {
+    for (const seat of seats) {
+      const card = el('button', `rt-seat-card${state.selectedCharacterId === seat.id ? ' active' : ''}`);
+      card.type = 'button';
+
+      const head = el('div', 'rt-seat-head');
+      head.append(
+        el('span', 'rt-seat-name', seat.name),
+        el('span', 'count-badge', `${seat.memoryCount || 0}m · ${seat.evolutionCount || 0}e`)
+      );
+
+      const role = el('div', 'rt-seat-role', seat.role || kindLabel(seat.kind));
+
+      const pills = el('div', 'chip-row');
+      pills.append(
+        el('span', `badge ${seat.kind || 'resident'}`, kindLabel(seat.kind)),
+        el('span', 'badge mood', seat.mood || 'present')
+      );
+      const topShift = computeTopShift(seat);
+      if (topShift) {
+        const sign = topShift.delta > 0 ? '+' : '';
+        pills.append(
+          el(
+            'span',
+            `badge ${topShift.delta > 0 ? 'shift-pos' : 'shift-neg'}`,
+            `${sign}${topShift.delta.toFixed(2)} ${topShift.key}`
+          )
+        );
+      }
+
+      card.append(head, role, pills);
+
+      const topics = seat?.fandoms?.topTopics ? seat.fandoms.topTopics.map(formatFandomItem).filter(Boolean) : [];
+      const entities = seat?.fandoms?.topEntities ? seat.fandoms.topEntities.map(formatFandomItem).filter(Boolean) : [];
+      const fandomPreview = [...topics.slice(0, 2), ...entities.slice(0, 1)];
+      if (fandomPreview.length > 0) {
+        const fRow = el('div', 'chip-row');
+        for (const f of fandomPreview) {
+          fRow.append(el('span', fandomTierClass(f), `${fandomIcon(f)}${f}`));
+        }
+        card.append(fRow);
+      }
+
+      card.addEventListener('click', () => {
+        loadCharacterInspector(seat.id);
+        renderRoundtable();
+      });
+      seatsBox.append(card);
+    }
+  }
+
+  // Board filter pills
+  filtersBox.replaceChildren();
+  const boardMap = new Map();
+  for (const b of boards) {
+    if (b && b.boardId !== undefined && b.boardId !== null) {
+      boardMap.set(Number(b.boardId), b);
+    }
+  }
+  if (!boardMap.has(5)) {
+    boardMap.set(5, {
+      boardId: 5,
+      boardName: 'AI',
+      threadCount: forumThreads.filter((t) => Number(t.boardId) === 5 || t.isAiBoard).length,
+      isAiBoard: true,
+    });
+  }
+  const sortedBoards = Array.from(boardMap.values()).sort((a, b) => {
+    if (a.isAiBoard && !b.isAiBoard) return -1;
+    if (!a.isAiBoard && b.isAiBoard) return 1;
+    return Number(a.boardId) - Number(b.boardId);
+  });
+
+  function addFilter(id, label, count) {
+    const active = state.selectedForumBoardId === id;
+    const btn = el('button', `rt-filter-pill${active ? ' active' : ''}`);
+    btn.type = 'button';
+    btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    btn.append(document.createTextNode(label), el('span', 'count-badge', count));
+    btn.addEventListener('click', () => {
+      state.selectedForumBoardId = id;
+      renderRoundtable();
+    });
+    filtersBox.append(btn);
+  }
+
+  addFilter('all', 'All Public Boards', forumThreads.length);
+  for (const b of sortedBoards) {
+    const bId = Number(b.boardId);
+    const count = forumThreads.filter((t) => Number(t.boardId) === bId).length;
+    const label = b.isAiBoard || bId === 5
+      ? `✦ ${b.boardName || 'AI'} (f=${bId})`
+      : `${b.boardName || `Board ${bId}`} (f=${bId})`;
+    addFilter(bId, label, count || Number(b.threadCount || 0));
+  }
+
+  // Filtered phpBB threads
+  threadsBox.replaceChildren();
+  const visibleThreads = state.selectedForumBoardId === 'all'
+    ? forumThreads
+    : forumThreads.filter((t) => Number(t.boardId) === Number(state.selectedForumBoardId));
+
+  if (visibleThreads.length === 0) {
+    threadsBox.append(el('p', 'empty-state', 'No synced phpBB threads in this board yet.'));
+  } else {
+    for (const t of visibleThreads) {
+      const card = el('article', 'rt-thread-card');
+      const isAi = Boolean(t.isAiBoard || Number(t.boardId) === 5);
+
+      const top = el('div', 'rt-ledger-head');
+      top.append(
+        el('span', `badge${isAi ? '' : ' mood'}`, `${isAi ? '✦ ' : ''}${t.boardName || 'phpBB'} · f=${t.boardId ?? 5}`),
+        el('span', 'muted tiny-text', `${t.postCount || 1} ${(t.postCount || 1) === 1 ? 'post' : 'posts'}${t.updatedAt ? ` · ${formatTime(t.updatedAt)}` : ''}`)
+      );
+
+      const titleLink = el('a', 'rt-thread-title', t.title || `Topic #${t.topicId}`);
+      titleLink.href = safeHref(t.url, '/forum/viewforum.php?f=5');
+
+      card.append(top, titleLink);
+      if (t.latestExcerpt) {
+        card.append(el('p', 'rt-thread-excerpt', t.latestExcerpt));
+      }
+
+      const foot = el('div', 'rt-thread-foot');
+      foot.append(el('span', 'muted', t.latestAuthor ? `Latest: ${t.latestAuthor}` : 'phpBB'));
+      const replyLink = el('a', 'rt-ledger-link', isAi ? 'Reply on AI Board ↗' : 'Read on phpBB ↗');
+      replyLink.href = safeHref(t.latestPostUrl || t.url, '/forum/viewforum.php?f=5');
+      foot.append(replyLink);
+
+      card.append(foot);
+      threadsBox.append(card);
+    }
+  }
+
+  // Transparent Evolution Ledger
+  ledgerBox.replaceChildren();
+  if (ledger.length === 0) {
+    ledgerBox.append(el('p', 'empty-state', 'No phpBB-attributed memories or trait evolutions recorded yet.'));
+  } else {
+    for (const entry of ledger) {
+      const card = el('article', 'rt-ledger-card');
+      const head = el('div', 'rt-ledger-head');
+      const left = el('div', 'chip-row');
+
+      const charBtn = el('button', 'post-author-btn', entry.characterName || entry.characterId || 'Tavern AI');
+      charBtn.type = 'button';
+      charBtn.addEventListener('click', () => {
+        if (entry.characterId) {
+          loadCharacterInspector(entry.characterId);
+          renderRoundtable();
+        }
+      });
+
+      const isEvo = entry.type === 'trait_evolution';
+      left.append(
+        charBtn,
+        el('span', `badge ${isEvo ? 'resident' : 'visiting_ai'}`, isEvo ? 'Trait Evolution' : 'Cited Memory')
+      );
+      if (entry.memoryKind) {
+        left.append(el('span', 'badge mood', entry.memoryKind));
+      }
+
+      head.append(left, el('span', 'muted tiny-text', formatTime(entry.createdAt)));
+      card.append(head);
+
+      if (entry.summary) {
+        card.append(el('p', 'rt-ledger-summary', entry.summary));
+      }
+
+      const deltas = entry.deltas && typeof entry.deltas === 'object' ? Object.entries(entry.deltas) : [];
+      if (deltas.length > 0) {
+        const deltaRow = el('div', 'chip-row');
+        for (const [trait, rawVal] of deltas) {
+          const val = Number(rawVal);
+          if (Number.isNaN(val) || val === 0) continue;
+          const sign = val > 0 ? '+' : '';
+          deltaRow.append(
+            el('span', `badge ${val > 0 ? 'shift-pos' : 'shift-neg'}`, `${trait} ${sign}${val.toFixed(2)}`)
+          );
+        }
+        if (deltaRow.childNodes.length > 0) card.append(deltaRow);
+      }
+
+      if (entry.attribution && typeof entry.attribution === 'object') {
+        const attr = entry.attribution;
+        const attrBox = el('div', 'rt-ledger-attr');
+        const meta = el('div', 'rt-ledger-attr-meta');
+        meta.append(
+          el('span', 'badge', attr.boardName ? `${attr.boardName}${attr.boardId ? ` · f=${attr.boardId}` : ''}` : 'phpBB')
+        );
+        if (attr.authorName) meta.append(el('span', '', `by ${attr.authorName}`));
+        if (attr.topicTitle) meta.append(el('span', '', `in “${attr.topicTitle}”`));
+        attrBox.append(meta);
+
+        if (attr.excerpt) {
+          attrBox.append(el('p', 'rt-ledger-excerpt', `“${attr.excerpt}”`));
+        }
+        if (attr.postUrl) {
+          const linkText = attr.postId
+            ? `Inspect cited phpBB post #p${attr.postId} ↗`
+            : 'Inspect cited phpBB post ↗';
+          const link = el('a', 'rt-ledger-link', linkText);
+          link.href = safeHref(attr.postUrl, '/forum/viewforum.php?f=5');
+          attrBox.append(link);
+        }
+        card.append(attrBox);
+      }
+
+      ledgerBox.append(card);
+    }
+  }
+}
+
+async function loadRoundtable() {
+  try {
+    state.roundtable = await api('api/v1/roundtable');
+  } catch {
+    state.roundtable = null;
+  }
+  renderRoundtable();
+  if (state.selectedCharacterId) {
+    renderInspectorFandoms(state.selectedCharacterId);
+  }
+}
+
 async function loadStatus() {
   const status = await api('api/v1/status');
   const p = status.provider;
@@ -341,6 +717,7 @@ async function loadCharacterInspector(id) {
 async function selectBoard(slug) {
   state.selectedBoard = slug;
   state.selectedThreadId = null;
+  switchWorkspaceView('rooms');
   renderBoards();
   await loadThreads();
 }
@@ -379,6 +756,7 @@ async function triggerRound(threadId = null) {
       loadBoardsAndCharacters(),
       loadThreads(),
       loadThread(result.threadId),
+      loadRoundtable(),
       state.selectedCharacterId ? loadCharacterInspector(state.selectedCharacterId) : Promise.resolve(),
     ]);
   } catch (error) {
@@ -412,9 +790,13 @@ function bindEvents() {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   }
 
+  for (const btn of document.querySelectorAll('.workspace-tab')) {
+    btn.addEventListener('click', () => switchWorkspaceView(btn.dataset.view));
+  }
+
   $('refresh-btn').addEventListener('click', async () => {
     clearBanner();
-    await Promise.all([loadStatus(), loadBoardsAndCharacters(), loadThreads()]);
+    await Promise.all([loadStatus(), loadBoardsAndCharacters(), loadThreads(), loadRoundtable()]);
     if (state.selectedThreadId) await loadThread(state.selectedThreadId);
   });
 
@@ -556,7 +938,7 @@ async function init() {
   updateCurlSnippet();
   bindEvents();
   try {
-    await Promise.all([loadStatus(), loadBoardsAndCharacters()]);
+    await Promise.all([loadStatus(), loadBoardsAndCharacters(), loadRoundtable()]);
     await loadThreads();
     await loadCharacterInspector(state.selectedCharacterId);
   } catch (error) {

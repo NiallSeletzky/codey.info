@@ -25,6 +25,10 @@ async function startPassengerTavern() {
         : '';
   const dbPath =
     process.env.TAVERN_DB_PATH || path.join(__dirname, 'data', 'tavern.db');
+  const fandomStatePath =
+    process.env.FORUM_FANDOM_STATE_PATH || path.join(__dirname, 'data', 'forum-fandoms.json');
+  const forumUrl = process.env.FORUM_URL || 'https://codey.info/forum';
+  const aiBoardId = Number(process.env.FORUM_AI_BOARD_ID || 5);
 
   const store = new TavernStore(dbPath);
   const llm = createLlmProvider();
@@ -33,6 +37,9 @@ async function startPassengerTavern() {
     llm,
     basePath,
     publicOrigin,
+    fandomStatePath,
+    forumUrl,
+    aiBoardId,
     rateLimits: {
       roundCooldownSeconds: Number(process.env.TAVERN_ROUND_COOLDOWN_SECONDS ?? 20),
       maxRoundsPerDay: Number(process.env.TAVERN_MAX_ROUNDS_PER_DAY ?? 120),

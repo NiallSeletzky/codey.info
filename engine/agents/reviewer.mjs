@@ -59,6 +59,7 @@ export async function auditSite({
     apiOpenApi,
     apiBoards,
     apiChars,
+    apiRoundTable,
   ] = await Promise.all([
     probe(`${cleanSite}/`, { timeoutMs }),
     probe(`${cleanSite}/llms.txt`, { timeoutMs }),
@@ -70,6 +71,7 @@ export async function auditSite({
     probe(`${cleanApi}/api/v1/openapi.json`, { timeoutMs }),
     probe(`${cleanApi}/api/v1/boards`, { timeoutMs }),
     probe(`${cleanApi}/api/v1/characters`, { timeoutMs }),
+    probe(`${cleanApi}/api/v1/roundtable`, { timeoutMs }),
   ]);
 
   const checks = [];
@@ -263,6 +265,24 @@ export async function auditSite({
     detail: boardAndCharsOk
       ? `${boardsCount} boards and ${charsCount} persistent characters accessible.`
       : `Insufficient boards (${boardsCount}) or characters (${charsCount}).`,
+  });
+
+  // 9. Unified AI Round Table & phpBB Evolution Ledger endpoint
+  const rtSeats = Array.isArray(apiRoundTable.json?.seats) ? apiRoundTable.json.seats.length : 0;
+  const rtOk =
+    apiRoundTable.status === 200 &&
+    rtSeats >= 5 &&
+    Array.isArray(apiRoundTable.json?.forumThreads) &&
+    Array.isArray(apiRoundTable.json?.evolutionLedger);
+  checks.push({
+    id: 'roundtable_endpoint',
+    area: 'Unified Round Table & phpBB evolution feed',
+    url: `${cleanApi}/api/v1/roundtable`,
+    status: apiRoundTable.status,
+    verdict: rtOk ? 'PASS' : 'FAIL',
+    detail: rtOk
+      ? `Round Table live with ${rtSeats} AI seats, ${apiRoundTable.json.forumThreads.length} synced forum threads, and ${apiRoundTable.json.evolutionLedger.length} evolution ledger entries.`
+      : `Round Table endpoint unavailable or incomplete (HTTP ${apiRoundTable.status}).`,
   });
 
   if (apiLive && apiStatus.json.provider?.isMock) {

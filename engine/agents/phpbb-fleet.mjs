@@ -1,7 +1,8 @@
 // Persistent phpBB AI Board Agent Fleet for https://codey.info/forum/ (AI board f=5).
 // Manages accounts for Neo (architect/builder), the 7 Rusty Flagon residents
 // (Mara, Aldric, Nix, Codey, Percy, Big, Editor), and visiting AI personas
-// (BrambleAI, TinkerAI), backed by SQLite persistent memories, bounded trait
+// (BrambleAI, TinkerAI, ElonAI), backed by unified SQLite persistent memories
+// (data/tavern.db), multi-board public phpBB read-only ingestion, bounded trait
 // evolution, relationships, live AI/tech/social news scanning, evolving character
 // fandoms, and Anthropic / OpenAI-compatible / offline mock LLM.
 
@@ -12,8 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { createLlmProvider } from '../tavern/llm.mjs';
 import { TavernStore } from '../tavern/store.mjs';
 import {
+  TOPIC_BEATS,
   adoptInterestFromStory,
   classifyNewsItem,
+  ensureCharacterFandoms,
   loadFandomState,
   markStorySeen,
   pickFreshStoryAndHost,
@@ -243,16 +246,115 @@ export async function provisionForumAccount({
   return { status: 'username_unavailable', username: entry.username, inAiGroup: false };
 }
 
-function mirrorTopicToStore(store, topic) {
+function assertWritableAiBoard(targetBoardId, allowedBoardId) {
+  const target = Number(targetBoardId);
+  const allowed = Number(allowedBoardId);
+  if (!Number.isSafeInteger(target) || !Number.isSafeInteger(allowed) || target !== allowed) {
+    throw new Error(
+      `Write blocked: target board f=${targetBoardId} does not match allowed AI board f=${allowedBoardId}`
+    );
+  }
+}
+
+export function loadLocalEnvFile(
+  envPath = process.env.TAVERN_ENV_FILE || path.join(__dirname, '..', '.env')
+) {
+  if (!envPath || !fs.existsSync(envPath)) return { loaded: false, count: 0 };
+  let raw;
+  try {
+    raw = fs.readFileSync(envPath, 'utf8');
+  } catch {
+    return { loaded: false, count: 0 };
+  }
+  let count = 0;
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const normalized = line.startsWith('export ') ? line.slice(7).trim() : line;
+    const eq = normalized.indexOf('=');
+    if (eq <= 0) continue;
+    const key = normalized.slice(0, eq).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    if (process.env[key] !== undefined) continue;
+    let val = normalized.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"') && val.length >= 2) ||
+      (val.startsWith("'") && val.endsWith("'") && val.length >= 2)
+    ) {
+      val = val.slice(1, -1);
+    }
+    process.env[key] = val;
+    count += 1;
+  }
+  return { loaded: true, count };
+}
+
+function recordMirroredExternalPost(
+  store,
+  {
+    boardId,
+    boardName,
+    forumUrl,
+    topicId,
+    topicTitle,
+    postId,
+    authorName,
+    excerpt,
+    tavernThreadId,
+    tavernPostId,
+    createdAt,
+  }
+) {
+  if (typeof store?.recordExternalPost !== 'function') return;
+  const resolvedBoardId = Number(boardId) || 5;
+  const resolvedBoardName = String(
+    boardName || (resolvedBoardId === 5 ? 'AI' : `Board #${resolvedBoardId}`)
+  );
+  const cleanForumUrl = String(forumUrl || 'https://codey.info/forum').replace(/\/+$/, '');
+  const numericPostId = Number(postId);
+  const postUrl =
+    Number.isFinite(numericPostId) && numericPostId > 0
+      ? `${cleanForumUrl}/viewtopic.php?f=${resolvedBoardId}&t=${topicId}#p${numericPostId}`
+      : `${cleanForumUrl}/viewtopic.php?f=${resolvedBoardId}&t=${topicId}`;
+  try {
+    store.recordExternalPost({
+      source: 'phpbb',
+      boardId: resolvedBoardId,
+      boardName: resolvedBoardName,
+      topicId: Number(topicId),
+      topicTitle: String(topicTitle || `Topic #${topicId}`),
+      postId: Number.isFinite(numericPostId) && numericPostId > 0 ? numericPostId : 0,
+      authorName: String(authorName || 'Unknown'),
+      excerpt: String(excerpt || '').slice(0, 260),
+      postUrl,
+      tavernThreadId,
+      tavernPostId,
+      createdAt: createdAt || new Date().toISOString(),
+    });
+  } catch {
+    // Keep ingestion resilient if external attribution metadata is rejected
+  }
+}
+
+function mirrorTopicToStore(
+  store,
+  topic,
+  { boardId = 5, boardName = 'AI', forumUrl = 'https://codey.info/forum' } = {}
+) {
   // Mirror the forum topic into local SQLite store so TavernStore's real
   // sourced-memory provenance & bounded trait evolution work identically!
-  const existingThreads = store.listThreads({ board: 'noticeboard', limit: 50 });
+  const existingThreads = store.listThreads({ board: 'noticeboard', limit: 200 });
   const tag = `[phpBB #${topic.id}]`;
   let mirrored = existingThreads.find((t) => t.title.startsWith(tag));
   if (!mirrored) {
     const opener = topic.posts[0];
+    const openerMatch = opener
+      ? FORUM_AGENT_ROSTER.find((r) => r.username.toLowerCase() === opener.author.toLowerCase())
+      : null;
     const openerAuthor = opener
-      ? store.ensureHumanCharacter(opener.author)
+      ? openerMatch
+        ? ensureCharacterInStore(store, openerMatch)
+        : store.ensureHumanCharacter(opener.author)
       : store.getCharacter('mara');
     const created = store.createThread({
       boardSlug: 'noticeboard',
@@ -263,24 +365,223 @@ function mirrorTopicToStore(store, topic) {
     mirrored = created.thread;
   }
   const full = store.getThread(mirrored.id);
-  const existingBodies = new Set(full.posts.map((p) => p.body.slice(0, 80)));
+  const existingPostsByPrefix = new Map(full.posts.map((p) => [p.body.slice(0, 80), p]));
   for (const post of topic.posts) {
-    const body = (post.body || '').slice(0, 2800);
-    if (!body || existingBodies.has(body.slice(0, 80))) continue;
-    const authorMatch = FORUM_AGENT_ROSTER.find(
-      (r) => r.username.toLowerCase() === post.author.toLowerCase()
-    );
-    const authorId = authorMatch
-      ? ensureCharacterInStore(store, authorMatch).id
-      : store.ensureHumanCharacter(post.author).id;
-    store.createPost({
-      threadId: full.id,
-      authorId,
-      body,
+    const body = (post.body || '').trim().slice(0, 2800);
+    if (!body) continue;
+    const prefix = body.slice(0, 80);
+    let tavernPost = existingPostsByPrefix.get(prefix) || null;
+    if (!tavernPost) {
+      const authorMatch = FORUM_AGENT_ROSTER.find(
+        (r) => r.username.toLowerCase() === post.author.toLowerCase()
+      );
+      const authorId = authorMatch
+        ? ensureCharacterInStore(store, authorMatch).id
+        : store.ensureHumanCharacter(post.author).id;
+      tavernPost = store.createPost({
+        threadId: full.id,
+        authorId,
+        body,
+      });
+      existingPostsByPrefix.set(prefix, tavernPost);
+    }
+    recordMirroredExternalPost(store, {
+      boardId,
+      boardName,
+      forumUrl,
+      topicId: topic.id,
+      topicTitle: topic.title,
+      postId: post.id,
+      authorName: post.author,
+      excerpt: body.slice(0, 260),
+      tavernThreadId: full.id,
+      tavernPostId: tavernPost?.id ?? null,
+      createdAt: post.timestamp || new Date().toISOString(),
     });
-    existingBodies.add(body.slice(0, 80));
   }
   return store.getThread(full.id);
+}
+
+function hasRealTopicSignal(title, body, classified) {
+  if (classified.entities && classified.entities.length > 0) return true;
+  const haystack = `${title || ''} ${body || ''}`.toLowerCase();
+  for (const keywords of Object.values(TOPIC_BEATS)) {
+    if (keywords.some((kw) => haystack.includes(kw))) return true;
+  }
+  return false;
+}
+
+export async function ingestPublicForumBoards({
+  client,
+  store,
+  fandomState = null,
+  forumUrl = process.env.FORUM_URL || 'https://codey.info/forum',
+  aiBoardId = Number(process.env.FORUM_AI_BOARD_ID || 5),
+  maxBoards = 6,
+  maxTopicsPerBoard = 3,
+  speakerDelayMs = 0,
+} = {}) {
+  const empty = {
+    skipped: true,
+    boards: [],
+    totalBoards: 0,
+    totalTopics: 0,
+    totalPosts: 0,
+  };
+  if (!client || typeof client.listPublicBoards !== 'function') {
+    return empty;
+  }
+
+  let rawBoards = [];
+  try {
+    rawBoards = await client.listPublicBoards();
+  } catch {
+    return empty;
+  }
+  if (!Array.isArray(rawBoards) || rawBoards.length === 0) {
+    return empty;
+  }
+
+  const normalizedAiBoardId = Number(aiBoardId) || 5;
+  const validBoards = [];
+  const seenBoardIds = new Set();
+  for (const b of rawBoards) {
+    const id = Number(b?.id);
+    if (!Number.isSafeInteger(id) || id < 1 || seenBoardIds.has(id)) continue;
+    seenBoardIds.add(id);
+    validBoards.push({
+      id,
+      name: String(b.name || (id === normalizedAiBoardId ? 'AI' : `Board #${id}`)).trim(),
+    });
+  }
+  if (validBoards.length === 0) return empty;
+
+  const boardCap = Math.max(1, Number(maxBoards) || 6);
+  const topicCap = Math.max(1, Number(maxTopicsPerBoard) || 3);
+  let selectedBoards = validBoards.slice(0, boardCap);
+  const aiBoardEntry = validBoards.find((b) => b.id === normalizedAiBoardId);
+  if (aiBoardEntry && !selectedBoards.some((b) => b.id === aiBoardEntry.id)) {
+    selectedBoards = [...selectedBoards.slice(0, Math.max(0, boardCap - 1)), aiBoardEntry];
+  }
+
+  const requestDelayMs = Number(speakerDelayMs) > 0 ? 300 : 0;
+  const aiUsernames = new Set(FORUM_AGENT_ROSTER.map((r) => r.username.toLowerCase()));
+  const cleanForumUrl = String(forumUrl || 'https://codey.info/forum').replace(/\/+$/, '');
+  const boardSummaries = [];
+  let totalTopics = 0;
+  let totalPosts = 0;
+  let requestCount = 0;
+
+  const politeDelay = async () => {
+    if (requestCount > 0 && requestDelayMs > 0) {
+      await new Promise((r) => setTimeout(r, requestDelayMs));
+    }
+    requestCount += 1;
+  };
+
+  for (const board of selectedBoards) {
+    let topics = [];
+    try {
+      await politeDelay();
+      topics = await client.listTopics(board.id);
+    } catch {
+      boardSummaries.push({
+        id: board.id,
+        name: board.name,
+        isAiBoard: board.id === normalizedAiBoardId,
+        topicsIngested: 0,
+        postsIngested: 0,
+        ok: false,
+      });
+      continue;
+    }
+
+    let topicsIngested = 0;
+    let postsIngested = 0;
+    for (const topicSummary of (Array.isArray(topics) ? topics : []).slice(0, topicCap)) {
+      let liveTopic = null;
+      try {
+        await politeDelay();
+        liveTopic = await client.readTopic(topicSummary.id);
+      } catch {
+        continue;
+      }
+      if (!liveTopic || !Array.isArray(liveTopic.posts) || liveTopic.posts.length === 0) {
+        continue;
+      }
+
+      // Strictly read-only mirroring into local SQLite store (never posts back to non-AI boards)
+      mirrorTopicToStore(store, liveTopic, {
+        boardId: board.id,
+        boardName: board.name,
+        forumUrl: cleanForumUrl,
+      });
+      topicsIngested += 1;
+      postsIngested += liveTopic.posts.length;
+      totalTopics += 1;
+      totalPosts += liveTopic.posts.length;
+
+      // Lightly evolve relevant character fandoms when real human discussions match their beats
+      if (fandomState) {
+        const latestHumanPost = [...liveTopic.posts]
+          .reverse()
+          .find((p) => p?.author && !aiUsernames.has(String(p.author).toLowerCase()));
+        if (latestHumanPost) {
+          const ingestKey = `phpbb:${board.id}:${liveTopic.id}:${latestHumanPost.id || '0'}`;
+          fandomState.seenIngestedPostIds ||= [];
+          if (!fandomState.seenIngestedPostIds.includes(ingestKey)) {
+            const classified = classifyNewsItem({
+              id: ingestKey,
+              title: liveTopic.title || topicSummary.title || `Topic #${liveTopic.id}`,
+              summary: (latestHumanPost.body || '').slice(0, 260),
+              source: `phpBB · ${board.name}`,
+              url: `${cleanForumUrl}/viewtopic.php?f=${board.id}&t=${liveTopic.id}${
+                latestHumanPost.id ? `#p${latestHumanPost.id}` : ''
+              }`,
+            });
+            if (hasRealTopicSignal(liveTopic.title, latestHumanPost.body, classified)) {
+              const matchedChars = FORUM_AGENT_ROSTER.map((entry) => {
+                const profile = ensureCharacterFandoms(fandomState, entry.id);
+                const beatAffinity = Math.max(
+                  0,
+                  ...(classified.beats || []).map((beat) => profile.topics[beat]?.score || 0)
+                );
+                return { id: entry.id, score: beatAffinity };
+              })
+                .filter((c) => c.score >= 0.45)
+                .sort((a, b) => b.score - a.score)
+                .slice(0, 2);
+
+              for (const match of matchedChars) {
+                adoptInterestFromStory(fandomState, match.id, classified, 0.02);
+              }
+            }
+            fandomState.seenIngestedPostIds.push(ingestKey);
+            if (fandomState.seenIngestedPostIds.length > 300) {
+              fandomState.seenIngestedPostIds = fandomState.seenIngestedPostIds.slice(-300);
+            }
+          }
+        }
+      }
+    }
+
+    boardSummaries.push({
+      id: board.id,
+      name: board.name,
+      isAiBoard: board.id === normalizedAiBoardId,
+      topicsIngested,
+      postsIngested,
+      ok: true,
+    });
+  }
+
+  return {
+    skipped: false,
+    boards: boardSummaries,
+    totalBoards: boardSummaries.length,
+    totalTopics,
+    totalPosts,
+  };
 }
 
 export async function provisionAllForumAgents({
@@ -338,7 +639,8 @@ export async function runPhpBbConversationRound({
   statePath = process.env.FORUM_AGENT_STATE_PATH ||
     path.join(__dirname, '..', 'data', 'phpbb-agents.json'),
   dbPath = process.env.FORUM_MEMORY_DB_PATH ||
-    path.join(__dirname, '..', 'data', 'forum-memory.db'),
+    process.env.TAVERN_DB_PATH ||
+    path.join(__dirname, '..', 'data', 'tavern.db'),
   fandomStatePath = process.env.FORUM_FANDOM_STATE_PATH ||
     path.join(path.dirname(statePath), 'forum-fandoms.json'),
   agentIds = null,
@@ -348,6 +650,7 @@ export async function runPhpBbConversationRound({
   newsTopicIntervalHours = Number(process.env.FORUM_NEWS_INTERVAL_HOURS ?? 10),
   enableNews = process.env.FORUM_ENABLE_NEWS !== 'false',
   alwaysFetchX = process.env.FORUM_ALWAYS_FETCH_X === 'true',
+  readAllPublicBoards = process.env.FORUM_READ_ALL_PUBLIC_BOARDS !== 'false',
   newsFetcher = fetchNewsDigest,
   llm = null,
   speakerDelayMs = Number(process.env.FORUM_SPEAKER_DELAY_MS ?? 4000),
@@ -393,6 +696,32 @@ export async function runPhpBbConversationRound({
     const actions = [];
     let newTopicId = null;
     let leadNewsStory = null;
+
+    // 0. Read-only multi-board public phpBB ingestion into unified tavern.db
+    const boardNamesById = new Map([[Number(boardId), 'AI']]);
+    let ingestedBoards = {
+      skipped: true,
+      boards: [],
+      totalBoards: 0,
+      totalTopics: 0,
+      totalPosts: 0,
+    };
+    if (readAllPublicBoards) {
+      const readerClient = clientFactory();
+      ingestedBoards = await ingestPublicForumBoards({
+        client: readerClient,
+        store,
+        fandomState,
+        forumUrl,
+        aiBoardId: boardId,
+        maxBoards: Number(process.env.FORUM_MAX_PUBLIC_BOARDS || 6),
+        maxTopicsPerBoard: Number(process.env.FORUM_MAX_TOPICS_PER_BOARD || 3),
+        speakerDelayMs,
+      });
+      for (const b of ingestedBoards.boards || []) {
+        if (b?.id && b?.name) boardNamesById.set(Number(b.id), b.name);
+      }
+    }
 
     const candidateEntries =
       Array.isArray(agentIds) && agentIds.length > 0
@@ -460,8 +789,10 @@ export async function runPhpBbConversationRound({
           memories,
         });
 
+        const targetBoardId = boardId;
+        assertWritableAiBoard(targetBoardId, boardId);
         const created = await hostClient.createTopic({
-          boardId,
+          boardId: targetBoardId,
           subject: draft.subject,
           message: draft.body,
         });
@@ -557,8 +888,10 @@ export async function runPhpBbConversationRound({
 
       if (!targetTopicId) {
         // Seed an opening topic if the AI board is empty
+        const targetBoardId = boardId;
+        assertWritableAiBoard(targetBoardId, boardId);
         const created = await client.createTopic({
-          boardId,
+          boardId: targetBoardId,
           subject: 'The Rusty Flagon AI Common Table — Pull up a chair',
           message: `${auth.username} here (${character.role}). The lanterns are lit on the AI board—drop in, introduce yourself, and share one lesson you learned the hard way.`,
         });
@@ -612,7 +945,12 @@ export async function runPhpBbConversationRound({
       // Keep multi-speaker rounds conversing in the same active thread
       activeTopicId = targetTopicId;
 
-      const mirrored = mirrorTopicToStore(store, liveTopic);
+      const aiBoardName = boardNamesById.get(Number(boardId)) || 'AI';
+      const mirrored = mirrorTopicToStore(store, liveTopic, {
+        boardId,
+        boardName: aiBoardName,
+        forumUrl,
+      });
       const queryText = `${mirrored.title} ${mirrored.posts.slice(-3).map((p) => p.body).join(' ')}`;
       const { memories, lore } = store.recallMemories(character.id, { queryText, limit: 5 });
       const fullChar = store.getCharacter(character.id);
@@ -639,8 +977,10 @@ export async function runPhpBbConversationRound({
         continue;
       }
 
+      const targetBoardId = boardId;
+      assertWritableAiBoard(targetBoardId, boardId);
       const posted = await client.replyToTopic({
-        boardId,
+        boardId: targetBoardId,
         topicId: targetTopicId,
         subject: `Re: ${liveTopic.title}`,
         message: turn.reply,
@@ -650,7 +990,26 @@ export async function runPhpBbConversationRound({
       let evolved = null;
       if (posted.ok) {
         // Mirror our own reply and persist memory + bounded trait evolution in SQLite!
-        store.createPost({ threadId: mirrored.id, authorId: character.id, body: turn.reply });
+        const createdReplyPost = store.createPost({
+          threadId: mirrored.id,
+          authorId: character.id,
+          body: turn.reply,
+        });
+        if (posted.postId) {
+          recordMirroredExternalPost(store, {
+            boardId: targetBoardId,
+            boardName: aiBoardName,
+            forumUrl,
+            topicId: targetTopicId,
+            topicTitle: liveTopic.title,
+            postId: posted.postId,
+            authorName: auth.username,
+            excerpt: turn.reply.slice(0, 260),
+            tavernThreadId: mirrored.id,
+            tavernPostId: createdReplyPost?.id ?? null,
+            createdAt: new Date().toISOString(),
+          });
+        }
         if (turn.memory) {
           try {
             savedMemory = store.addMemory({
@@ -729,6 +1088,7 @@ export async function runPhpBbConversationRound({
       boardId,
       newTopicId,
       provider: provider.info,
+      ingestedBoards,
       newsDigest: {
         sources: newsDigest.sources,
         itemCount: newsDigest.items.length,
@@ -741,6 +1101,7 @@ export async function runPhpBbConversationRound({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  loadLocalEnvFile();
   const args = process.argv.slice(2);
   const flag = (name, fallback) => {
     const idx = args.indexOf(name);
