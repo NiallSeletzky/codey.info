@@ -338,8 +338,7 @@ export async function runPhpBbConversationRound({
       const lastLivePost = liveTopic.posts[liveTopic.posts.length - 1];
       if (
         lastLivePost &&
-        lastLivePost.author.toLowerCase() === auth.username.toLowerCase() &&
-        chosenEntries.length === 1
+        lastLivePost.author.toLowerCase() === auth.username.toLowerCase()
       ) {
         actions.push({
           id: entry.id,
