@@ -95,6 +95,22 @@ function saveState(statePath, state) {
   fs.renameSync(tmp, statePath);
 }
 
+function resolvePasswordSeed(explicitSeed) {
+  if (explicitSeed) return explicitSeed;
+  if (process.env.FORUM_AGENT_PASSWORD_SEED) return process.env.FORUM_AGENT_PASSWORD_SEED;
+  const fallbackKey =
+    process.env.XAI_API_KEY ||
+    process.env.ANTHROPIC_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    process.env.OPENROUTER_API_KEY ||
+    '';
+  if (!fallbackKey) return '';
+  return crypto
+    .createHmac('sha256', fallbackKey)
+    .update('rusty-flagon-forum-seed-v1')
+    .digest('hex');
+}
+
 function derivePassword(username, seed) {
   if (seed) {
     const digest = crypto
@@ -128,8 +144,9 @@ export async function provisionForumAccount({
   entry,
   state,
   groupId = 9,
-  passwordSeed = process.env.FORUM_AGENT_PASSWORD_SEED || '',
+  passwordSeed = '',
 }) {
+  const effectiveSeed = resolvePasswordSeed(passwordSeed);
   const saved = state.accounts[entry.id];
   if (saved?.username && saved?.password) {
     client.clearCookies();
@@ -147,25 +164,21 @@ export async function provisionForumAccount({
     }
   }
 
-  // Try canonical username first; if already taken by an uncached prior run, try clean _AI / _Tavern fallbacks.
+  // Try canonical username first; if already taken by an uncached prior run, try clean fallbacks.
   const baseShort = entry.username.replace(/AI$/, '');
   const candidates = [
     { username: entry.username, email: entry.email },
-    {
-      username: `${baseShort}_AI`,
-      email: entry.email.replace('@', '-ai2@'),
-    },
-    {
-      username: `${baseShort}_Tavern`,
-      email: entry.email.replace('@', '-tavern@'),
-    },
+    { username: `${baseShort}_AI`, email: entry.email.replace('@', '-ai2@') },
+    { username: `${baseShort}_Tavern`, email: entry.email.replace('@', '-tavern@') },
+    { username: `${baseShort}_Flagon`, email: entry.email.replace('@', '-flagon@') },
+    { username: `${baseShort}_Hearth`, email: entry.email.replace('@', '-hearth@') },
   ];
 
   for (const cand of candidates) {
-    const password = derivePassword(cand.username, passwordSeed);
+    const password = derivePassword(cand.username, effectiveSeed);
 
     // If deterministic seed is configured, try logging in first in case the account already exists!
-    if (passwordSeed) {
+    if (effectiveSeed) {
       client.clearCookies();
       const preLogin = await client.login({ username: cand.username, password });
       if (preLogin.ok) {
@@ -386,10 +399,13 @@ export async function runPhpBbConversationRound({
       });
 
       if (!hostAuth.inAiGroup) {
+        excludedForReplies.add(hostEntry.id);
+        saveState(statePath, state);
         actions.push({
           id: hostEntry.id,
           username: hostAuth.username,
           status: 'skipped_not_in_group',
+          authStatus: hostAuth.status,
         });
       } else {
         const hostChar = ensureCharacterInStore(store, hostEntry);
@@ -477,7 +493,13 @@ export async function runPhpBbConversationRound({
       const client = clientFactory();
       const auth = await provisionForumAccount({ client, entry, state, groupId });
       if (!auth.inAiGroup) {
-        actions.push({ id: entry.id, username: auth.username, status: 'skipped_not_in_group' });
+        saveState(statePath, state);
+        actions.push({
+          id: entry.id,
+          username: auth.username,
+          status: 'skipped_not_in_group',
+          authStatus: auth.status,
+        });
         continue;
       }
 
