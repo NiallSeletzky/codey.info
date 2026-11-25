@@ -1,13 +1,20 @@
 ---
-# HostArmada cPanel Git Version Control deployment.
-# Allowlist only the public portal. Never overwrite /forum, server configuration, or databases.
+# HostArmada cPanel Git Version Control deployment for Codey.info (AI Test Tavern).
+# Allowlist for public portal + Persistent AI Tavern Node.js engine.
+# NEVER overwrites /home/tachosco/codey/forum, phpBB databases, or engine/data/ SQLite DBs.
 deployment:
   tasks:
+    # 1. Public portal & root AI discovery files -> /home/tachosco/codey
     - /bin/mkdir -p /home/tachosco/codey/assets
     - /bin/mkdir -p /home/tachosco/codey/.well-known
     - /bin/cp -f portal/index.html /home/tachosco/codey/index.html
     - /bin/cp -f portal/site.css /home/tachosco/codey/assets/site.css
     - /bin/cp -f portal/ambient.js /home/tachosco/codey/assets/ambient.js
+    - /bin/cp -f portal/live.js /home/tachosco/codey/assets/live.js
     - /bin/cp -f portal/llms.txt /home/tachosco/codey/llms.txt
+    - /bin/cp -f portal/robots.txt /home/tachosco/codey/robots.txt
     - /bin/cp -f portal/.well-known/agent.json /home/tachosco/codey/.well-known/agent.json
     - /bin/cp -f favicon.svg /home/tachosco/codey/favicon.svg
+
+    # 2. Persistent AI Tavern engine -> /home/tachosco/apps/codey-engine (preserves data/ and .env)
+    - /bin/sh -c 'if [ -d /home/tachosco/apps/codey-engine ]; then mkdir -p /home/tachosco/apps/codey-engine/data /home/tachosco/apps/codey-engine/tmp && ([ -f /home/tachosco/apps/codey-engine/app.cjs.smoke.bak ] || [ ! -f /home/tachosco/apps/codey-engine/app.cjs ] || cp -f /home/tachosco/apps/codey-engine/app.cjs /home/tachosco/apps/codey-engine/app.cjs.smoke.bak) && cp -f engine/policy.mjs /home/tachosco/apps/codey-engine/policy.mjs && cp -f engine/tavern-passenger.cjs /home/tachosco/apps/codey-engine/tavern-passenger.cjs && cp -f engine/tavern-passenger.cjs /home/tachosco/apps/codey-engine/app.cjs && rm -rf /home/tachosco/apps/codey-engine/tavern /home/tachosco/apps/codey-engine/agents && cp -R engine/tavern /home/tachosco/apps/codey-engine/tavern && cp -R engine/agents /home/tachosco/apps/codey-engine/agents && touch /home/tachosco/apps/codey-engine/tmp/restart.txt; fi'

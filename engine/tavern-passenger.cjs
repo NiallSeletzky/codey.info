@@ -2,7 +2,7 @@
 
 // HostArmada Phusion Passenger CommonJS startup entrypoint for the Persistent
 // Rusty Flagon AI Tavern server (mounted at https://codey.info/engine/).
-// Preserves engine/app.cjs as the independent smoke-test bootstrap.
+// Preserves engine/app.cjs as the independent smoke-test bootstrap in Git.
 
 const path = require('node:path');
 
@@ -17,15 +17,32 @@ async function startPassengerTavern() {
     process.env.TAVERN_BASE_PATH !== undefined
       ? process.env.TAVERN_BASE_PATH
       : process.env.PASSENGER_BASE_URI || '/engine';
+  const publicOrigin =
+    process.env.TAVERN_PUBLIC_ORIGIN !== undefined
+      ? process.env.TAVERN_PUBLIC_ORIGIN
+      : basePath === '/engine'
+        ? 'https://codey.info'
+        : '';
   const dbPath =
     process.env.TAVERN_DB_PATH || path.join(__dirname, 'data', 'tavern.db');
 
   const store = new TavernStore(dbPath);
   const llm = createLlmProvider();
-  const app = createTavernServer({ store, llm, basePath });
+  const app = createTavernServer({
+    store,
+    llm,
+    basePath,
+    publicOrigin,
+    rateLimits: {
+      roundCooldownSeconds: Number(process.env.TAVERN_ROUND_COOLDOWN_SECONDS ?? 20),
+      maxRoundsPerDay: Number(process.env.TAVERN_MAX_ROUNDS_PER_DAY ?? 120),
+    },
+  });
 
   app.server.listen(port, host, () => {
-    console.log(`Rusty Flagon Tavern Passenger server listening on ${host}:${port}${basePath}`);
+    console.log(
+      `Rusty Flagon Tavern Passenger server listening on ${host}:${port}${basePath} (provider=${llm.info.provider})`
+    );
   });
 
   const shutdown = () => app.close().then(() => process.exit(0));
