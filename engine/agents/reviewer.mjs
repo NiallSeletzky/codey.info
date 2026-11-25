@@ -8,13 +8,16 @@ import path from 'node:path';
 
 const ISSUE_TITLE = '[Tavern Review] Automated site audit & requirements check';
 
-async function probe(url, { method = 'GET', timeoutMs = 10000 } = {}) {
+async function probe(url, { method = 'GET', body = null, timeoutMs = 10000 } = {}) {
   try {
+    const headers = { Accept: 'application/json, text/plain, text/html;q=0.9' };
+    if (body !== null) headers['Content-Type'] = 'application/json';
     const res = await fetch(url, {
       method,
       redirect: 'follow',
       signal: AbortSignal.timeout(timeoutMs),
-      headers: { Accept: 'application/json, text/plain, text/html;q=0.9' },
+      headers,
+      body: body !== null ? JSON.stringify(body) : undefined,
     });
     const contentType = res.headers.get('content-type') || '';
     const text = method === 'HEAD' ? '' : (await res.text()).slice(0, 65536);
@@ -60,6 +63,7 @@ export async function auditSite({
     apiBoards,
     apiChars,
     apiRoundTable,
+    apiMcpInit,
   ] = await Promise.all([
     probe(`${cleanSite}/`, { timeoutMs }),
     probe(`${cleanSite}/llms.txt`, { timeoutMs }),
@@ -72,6 +76,20 @@ export async function auditSite({
     probe(`${cleanApi}/api/v1/boards`, { timeoutMs }),
     probe(`${cleanApi}/api/v1/characters`, { timeoutMs }),
     probe(`${cleanApi}/api/v1/roundtable`, { timeoutMs }),
+    probe(`${cleanApi}/mcp`, {
+      method: 'POST',
+      body: {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'initialize',
+        params: {
+          protocolVersion: '2025-03-26',
+          capabilities: {},
+          clientInfo: { name: 'tavern-reviewer', version: '1.0.0' },
+        },
+      },
+      timeoutMs,
+    }),
   ]);
 
   const checks = [];
@@ -283,6 +301,23 @@ export async function auditSite({
     detail: rtOk
       ? `Round Table live with ${rtSeats} AI seats, ${apiRoundTable.json.forumThreads.length} synced forum threads, and ${apiRoundTable.json.evolutionLedger.length} evolution ledger entries.`
       : `Round Table endpoint unavailable or incomplete (HTTP ${apiRoundTable.status}).`,
+  });
+
+  // 10. Remote MCP Streamable HTTP server (/mcp)
+  const mcpServerName = apiMcpInit.json?.result?.serverInfo?.name;
+  const mcpOk =
+    apiMcpInit.status === 200 &&
+    mcpServerName === 'rusty-flagon-tavern' &&
+    Boolean(apiMcpInit.json?.result?.capabilities?.tools);
+  checks.push({
+    id: 'mcp_remote_server',
+    area: 'Remote MCP Streamable HTTP server (/mcp)',
+    url: `${cleanApi}/mcp`,
+    status: apiMcpInit.status,
+    verdict: mcpOk ? 'PASS' : 'FAIL',
+    detail: mcpOk
+      ? `Remote MCP live (${mcpServerName} v${apiMcpInit.json.result.serverInfo.version}, protocol ${apiMcpInit.json.result.protocolVersion}).`
+      : `Remote MCP endpoint unavailable or did not complete initialize (HTTP ${apiMcpInit.status}).`,
   });
 
   if (apiLive && apiStatus.json.provider?.isMock) {

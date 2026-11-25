@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { renderAgentManifest, renderLlmsTxt, renderOpenApiSpec } from './discovery.mjs';
 import { createLlmProvider, LlmProviderError } from './llm.mjs';
 import { runTavernRound } from './loop.mjs';
+import { createMcpHandler } from './mcp.mjs';
 import { TavernStore, TavernStoreError } from './store.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +23,9 @@ function sendJson(res, status, payload, extraHeaders = {}) {
     'Cache-Control': 'no-store',
     'X-Content-Type-Options': 'nosniff',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    'Access-Control-Allow-Headers':
+      'Authorization, Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id',
+    'Access-Control-Expose-Headers': 'Mcp-Session-Id, MCP-Protocol-Version',
     'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
     ...extraHeaders,
   });
@@ -39,7 +42,7 @@ function sendText(res, status, text, contentType = 'text/plain; charset=utf-8') 
   res.end(text);
 }
 
-async function readJsonBody(req) {
+async function readJsonPayload(req) {
   const chunks = [];
   let total = 0;
   for await (const chunk of req) {
@@ -52,15 +55,18 @@ async function readJsonBody(req) {
   const raw = Buffer.concat(chunks).toString('utf8').trim();
   if (!raw) return {};
   try {
-    const parsed = JSON.parse(raw);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new TavernStoreError('invalid_json', 'JSON object body expected', 400);
-    }
-    return parsed;
-  } catch (error) {
-    if (error instanceof TavernStoreError) throw error;
+    return JSON.parse(raw);
+  } catch {
     throw new TavernStoreError('invalid_json', 'Malformed JSON body', 400);
   }
+}
+
+async function readJsonBody(req) {
+  const parsed = await readJsonPayload(req);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new TavernStoreError('invalid_json', 'JSON object body expected', 400);
+  }
+  return parsed;
 }
 
 function extractBearerToken(req) {
@@ -243,6 +249,31 @@ export function createTavernServer({
     '/assets/app.js': { file: 'app.js', type: 'application/javascript; charset=utf-8' },
   };
 
+  const mcpHandler = createMcpHandler({
+    store: tavernStore,
+    llm: llmProvider,
+    limits,
+    fandomStatePath,
+    forumUrl,
+    aiBoardId,
+    checkRegistrationRateLimit: (ip) => {
+      try {
+        checkRegistrationLimit(ip);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    checkAgentPostRateLimit: (characterId) => {
+      try {
+        checkPostingLimit(characterId);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  });
+
   const server = http.createServer(async (req, res) => {
     try {
       const parsedUrl = new URL(req.url, `http://${req.headers.host || '127.0.0.1'}`);
@@ -266,9 +297,80 @@ export function createTavernServer({
       if (method === 'OPTIONS') {
         res.writeHead(204, {
           'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+          'Access-Control-Allow-Headers':
+            'Authorization, Content-Type, Accept, MCP-Protocol-Version, Mcp-Session-Id',
+          'Access-Control-Expose-Headers': 'Mcp-Session-Id, MCP-Protocol-Version',
           'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
         });
+        return res.end();
+      }
+
+      // ---- Remote MCP Streamable HTTP Server (/mcp) ----
+      if (pathname === '/mcp') {
+        const origin = resolveOrigin(req, normalizedBasePath, publicOrigin);
+        if (method === 'POST') {
+          let payload;
+          try {
+            payload = await readJsonPayload(req);
+          } catch {
+            return sendJson(res, 400, {
+              jsonrpc: '2.0',
+              id: null,
+              error: { code: -32700, message: 'Parse error: malformed JSON' },
+            });
+          }
+          const result = await mcpHandler.handlePayload(payload, {
+            bearerToken: extractBearerToken(req),
+            clientIp: resolveClientIp(req),
+            origin,
+          });
+          if (result.status === 202 || result.body === null) {
+            res.writeHead(202, {
+              'Cache-Control': 'no-store',
+              'Access-Control-Allow-Origin': '*',
+              'Access-Control-Expose-Headers': 'Mcp-Session-Id, MCP-Protocol-Version',
+            });
+            return res.end();
+          }
+          return sendJson(res, result.status, result.body);
+        }
+        if (method === 'GET' || method === 'HEAD') {
+          const accept = String(req.headers.accept || '');
+          if (accept.includes('text/event-stream')) {
+            res.writeHead(405, {
+              Allow: 'POST, OPTIONS',
+              'Content-Type': 'application/json; charset=utf-8',
+              'Access-Control-Allow-Origin': '*',
+            });
+            return res.end(
+              method === 'HEAD'
+                ? undefined
+                : JSON.stringify({
+                    error: {
+                      code: 'sse_not_supported',
+                      message: 'Stateless Streamable HTTP MCP server: use HTTP POST to /mcp.',
+                    },
+                  })
+            );
+          }
+          if (method === 'HEAD') {
+            res.writeHead(200, {
+              'Content-Type': 'application/json; charset=utf-8',
+              'Cache-Control': 'no-store',
+              'Access-Control-Allow-Origin': '*',
+            });
+            return res.end();
+          }
+          return sendJson(res, 200, mcpHandler.getDiscoveryInfo(origin));
+        }
+        if (method === 'DELETE') {
+          res.writeHead(204, {
+            'Access-Control-Allow-Origin': '*',
+            'Cache-Control': 'no-store',
+          });
+          return res.end();
+        }
+        res.writeHead(405, { Allow: 'GET, POST, DELETE, OPTIONS' });
         return res.end();
       }
 

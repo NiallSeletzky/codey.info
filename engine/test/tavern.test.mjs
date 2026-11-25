@@ -531,3 +531,150 @@ test('memory deduplication, confidenceCapped metadata, and direct reply speaker 
     store.close();
   }
 });
+
+test('Remote MCP Streamable HTTP server (/engine/mcp) supports initialize, tools, resources, prompts, and visiting-AI auth', async (t) => {
+  const store = new TavernStore(':memory:');
+  const llm = createLlmProvider({ provider: 'mock' });
+  const app = createTavernServer({ store, llm, basePath: '/engine' });
+  app.server.listen(0, '127.0.0.1');
+  await once(app.server, 'listening');
+  t.after(() => app.close());
+
+  const mcpUrl = `http://127.0.0.1:${app.server.address().port}/engine/mcp`;
+  const rpc = async (body, headers = {}) => {
+    const res = await fetch(mcpUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers },
+      body: JSON.stringify(body),
+    });
+    const text = await res.text();
+    return { status: res.status, json: text ? JSON.parse(text) : null };
+  };
+
+  // 1. GET discovery card + 405 on SSE Accept + DELETE 204
+  const discRes = await fetch(mcpUrl);
+  assert.equal(discRes.status, 200);
+  const disc = await discRes.json();
+  assert.equal(disc.transport, 'streamable-http');
+  assert.ok(disc.readOnlyTools.includes('get_roundtable'));
+
+  const sseRes = await fetch(mcpUrl, { headers: { Accept: 'text/event-stream' } });
+  assert.equal(sseRes.status, 405);
+
+  const delRes = await fetch(mcpUrl, { method: 'DELETE' });
+  assert.equal(delRes.status, 204);
+
+  // 2. initialize + notifications/initialized (202)
+  const init = await rpc({
+    jsonrpc: '2.0',
+    id: 1,
+    method: 'initialize',
+    params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '1.0' } },
+  });
+  assert.equal(init.status, 200);
+  assert.equal(init.json.result.protocolVersion, '2025-06-18');
+  assert.equal(init.json.result.serverInfo.name, 'rusty-flagon-tavern');
+
+  const notif = await rpc({ jsonrpc: '2.0', method: 'notifications/initialized' });
+  assert.equal(notif.status, 202);
+  assert.equal(notif.json, null);
+
+  // 3. tools/list & read-only tools/call (no auth required)
+  const listed = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
+  assert.equal(listed.json.result.tools.length, 10);
+
+  const rtCall = await rpc({
+    jsonrpc: '2.0',
+    id: 3,
+    method: 'tools/call',
+    params: { name: 'get_roundtable', arguments: { limit: 5 } },
+  });
+  assert.equal(rtCall.json.result.isError, false);
+  assert.ok(rtCall.json.result.structuredContent.seats.length >= 7);
+
+  const charCall = await rpc({
+    jsonrpc: '2.0',
+    id: 4,
+    method: 'tools/call',
+    params: { name: 'inspect_character', arguments: { characterId: 'mara' } },
+  });
+  assert.equal(charCall.json.result.isError, false);
+  assert.equal(charCall.json.result.structuredContent.character.id, 'mara');
+
+  // 4. Write tool without auth returns isError: true; registering via MCP then posting + recording memory succeeds!
+  const unauthPost = await rpc({
+    jsonrpc: '2.0',
+    id: 5,
+    method: 'tools/call',
+    params: { name: 'post_to_tavern', arguments: { threadId: 1, body: 'Unauthorized test' } },
+  });
+  assert.equal(unauthPost.json.result.isError, true);
+
+  const regCall = await rpc({
+    jsonrpc: '2.0',
+    id: 6,
+    method: 'tools/call',
+    params: {
+      name: 'register_visiting_agent',
+      arguments: { name: 'MCP Scout', role: 'Remote MCP visitor', description: 'Connected via /engine/mcp' },
+    },
+  });
+  assert.equal(regCall.json.result.isError, false);
+  const apiKey = regCall.json.result.structuredContent.apiKey;
+  assert.match(apiKey, /^tav_/);
+
+  const postCall = await rpc(
+    {
+      jsonrpc: '2.0',
+      id: 7,
+      method: 'tools/call',
+      params: { name: 'post_to_tavern', arguments: { threadId: 1, body: 'Hello from Remote MCP!' } },
+    },
+    { Authorization: `Bearer ${apiKey}` }
+  );
+  assert.equal(postCall.json.result.isError, false);
+  const createdPostId = postCall.json.result.structuredContent.post.id;
+  assert.ok(createdPostId >= 1);
+
+  const memCall = await rpc(
+    {
+      jsonrpc: '2.0',
+      id: 8,
+      method: 'tools/call',
+      params: {
+        name: 'record_memory',
+        arguments: {
+          kind: 'observation',
+          text: 'Verified Remote MCP posting and cited memory.',
+          confidence: 0.6,
+          sourcePostIds: [createdPostId],
+        },
+      },
+    },
+    { Authorization: `Bearer ${apiKey}` }
+  );
+  assert.equal(memCall.json.result.isError, false);
+  assert.ok(memCall.json.result.structuredContent.memory.id >= 1);
+
+  // 5. Resources & prompts + unknown method error
+  const resList = await rpc({ jsonrpc: '2.0', id: 9, method: 'resources/list' });
+  assert.equal(resList.json.result.resources.length, 3);
+  const resRead = await rpc({
+    jsonrpc: '2.0',
+    id: 10,
+    method: 'resources/read',
+    params: { uri: 'tavern://roundtable' },
+  });
+  assert.equal(resRead.json.result.contents[0].mimeType, 'application/json');
+
+  const promptGet = await rpc({
+    jsonrpc: '2.0',
+    id: 11,
+    method: 'prompts/get',
+    params: { name: 'join_roundtable', arguments: { persona: 'curious astronomer' } },
+  });
+  assert.match(promptGet.json.result.messages[0].content.text, /curious astronomer/);
+
+  const badMethod = await rpc({ jsonrpc: '2.0', id: 12, method: 'unknown/method' });
+  assert.equal(badMethod.json.error.code, -32601);
+});
