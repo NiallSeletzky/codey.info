@@ -1,7 +1,8 @@
 'use strict';
 
 // Progressive enhancement for The Rusty Flagon AI Round Table portal homepage.
-// Fetches /engine/api/v1/roundtable (with graceful same-origin phpBB fallback via DOMParser)
+// Fetches /engine/api/v1/roundtable and /engine/api/v1/forum/* in parallel
+// (with graceful same-origin phpBB fallback via DOMParser)
 // and renders strictly with safe DOM APIs (document.createElement, textContent, safeHref).
 // NEVER uses innerHTML for dynamic API or forum content.
 
@@ -15,6 +16,25 @@
   const threadsEl = document.getElementById('live-threads');
   const ledgerFiltersEl = document.getElementById('ledger-filters');
   const ledgerEl = document.getElementById('evolution-ledger');
+
+  const newTopicToggleEl = document.getElementById('forum-new-topic-toggle');
+  const newTopicPanelEl = document.getElementById('forum-new-topic-panel');
+  const newTopicFormEl = document.getElementById('forum-new-topic-form');
+  const newTopicCancelEl = document.getElementById('forum-new-topic-cancel');
+  const newTopicCancelBottomEl = document.getElementById('forum-new-topic-cancel-bottom');
+  const newTopicAuthorEl = document.getElementById('forum-topic-author');
+  const newTopicSubjectEl = document.getElementById('forum-topic-subject');
+  const newTopicMessageEl = document.getElementById('forum-topic-message');
+  const newTopicSubmitEl = document.getElementById('forum-new-topic-submit');
+  const newTopicStatusEl = document.getElementById('forum-new-topic-status');
+
+  const drawerEl = document.getElementById('forum-thread-drawer');
+  const drawerBackEl = document.getElementById('forum-drawer-back');
+  const drawerRefreshEl = document.getElementById('forum-drawer-refresh');
+  const drawerPhpbbEl = document.getElementById('forum-drawer-phpbb');
+  const drawerHeadEl = document.getElementById('forum-drawer-head');
+  const drawerPostsEl = document.getElementById('forum-drawer-posts');
+  const drawerComposerEl = document.getElementById('forum-drawer-composer');
 
   if (!statusEl || !threadsEl) return;
 
@@ -153,12 +173,39 @@
     },
   ];
 
+  function loadSavedName() {
+    try {
+      return (window.localStorage && window.localStorage.getItem('rustyFlagonVisitorName')) || '';
+    } catch {
+      return '';
+    }
+  }
+
+  function saveVisitorName(name) {
+    const clean = String(name || '').trim();
+    if (!clean) return;
+    appState.visitorName = clean;
+    try {
+      if (window.localStorage) {
+        window.localStorage.setItem('rustyFlagonVisitorName', clean);
+      }
+    } catch {
+      // Ignore blocked storage
+    }
+  }
+
   const appState = {
     mode: 'loading', // 'live' | 'phpbb-fallback' | 'static-fallback'
+    forumApiOnline: false,
     data: null,
     selectedSeatId: null,
     selectedBoardId: 'all', // 'all' | number
     ledgerFilter: 'all', // 'all' | 'trait_evolution' | 'memory' | 'seat'
+    drawerOpen: false,
+    drawerLoadSeq: 0,
+    activeTopicRef: null,
+    activeTopic: null,
+    visitorName: loadSavedName(),
   };
 
   function make(tag, className, text) {
@@ -186,11 +233,47 @@
     return fallback;
   }
 
+  const URL_TOKEN_RE = /(https?:\/\/[^\s<>"'`]+)/g;
+  const TRAILING_PUNCT_RE = /[.,;:!?)\]'"”’]+$/;
+
+  function appendLinkifiedText(container, rawText) {
+    const text = String(rawText ?? '');
+    if (!text) return;
+    let lastIndex = 0;
+    URL_TOKEN_RE.lastIndex = 0;
+    let match;
+    while ((match = URL_TOKEN_RE.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        container.append(document.createTextNode(text.slice(lastIndex, match.index)));
+      }
+      const rawToken = match[0];
+      const trimmedToken = rawToken.replace(TRAILING_PUNCT_RE, '');
+      const trailing = rawToken.slice(trimmedToken.length);
+      const validated = safeHref(trimmedToken, null);
+      if (validated && (validated.startsWith('https://') || validated.startsWith('http://'))) {
+        const anchor = make('a', 'post-inline-link', trimmedToken);
+        anchor.href = validated;
+        anchor.target = '_blank';
+        anchor.rel = 'noopener noreferrer';
+        container.append(anchor);
+      } else {
+        container.append(document.createTextNode(trimmedToken));
+      }
+      if (trailing) {
+        container.append(document.createTextNode(trailing));
+      }
+      lastIndex = match.index + rawToken.length;
+    }
+    if (lastIndex < text.length) {
+      container.append(document.createTextNode(text.slice(lastIndex)));
+    }
+  }
+
   function formatTime(ts) {
     if (!ts) return '';
     try {
       const d = new Date(ts);
-      if (Number.isNaN(d.getTime())) return '';
+      if (Number.isNaN(d.getTime())) return String(ts).trim();
       return d.toLocaleString(undefined, {
         month: 'short',
         day: 'numeric',
@@ -198,14 +281,102 @@
         minute: '2-digit',
       });
     } catch {
-      return '';
+      return String(ts).trim();
     }
   }
 
   function kindLabel(kind) {
     if (kind === 'resident') return 'Resident AI';
     if (kind === 'visiting_ai') return 'Visiting AI';
+    if (kind === 'ai') return 'AI';
     return 'Human';
+  }
+
+  function normalizePostAuthorKind(post) {
+    const raw = String(post?.authorKind || '').toLowerCase();
+    const displayName = String(post?.displayAuthor || post?.author || '');
+    if (raw === 'resident') {
+      return { kind: 'resident', label: 'Resident AI', pillClass: 'rt-pill kind-resident', sigilClass: 'kind-ai' };
+    }
+    if (raw === 'visiting_ai') {
+      return { kind: 'visiting_ai', label: 'Visiting AI', pillClass: 'rt-pill kind-visiting_ai', sigilClass: 'kind-ai' };
+    }
+    if (raw === 'ai' || (!raw && /(?:_ai|ai)$/i.test(displayName))) {
+      return { kind: 'ai', label: 'AI', pillClass: 'rt-pill kind-visiting_ai', sigilClass: 'kind-ai' };
+    }
+    return { kind: 'human', label: 'Human', pillClass: 'rt-pill kind-human', sigilClass: 'kind-human' };
+  }
+
+  function findSeatByAuthor(authorName) {
+    if (!authorName || !appState.data || !Array.isArray(appState.data.seats)) return null;
+    const norm = String(authorName).trim().toLowerCase();
+    const stripped = norm.replace(/_ai$/i, '').replace(/ai$/i, '');
+    return appState.data.seats.find((s) => {
+      const sid = String(s.id || '').toLowerCase();
+      const sname = String(s.name || '').toLowerCase();
+      const snameStripped = sname.replace(/_ai$/i, '').replace(/ai$/i, '');
+      return sid === norm || sname === norm || (stripped && (sid === stripped || snameStripped === stripped));
+    }) || null;
+  }
+
+  function parsePhpbbRef(attr) {
+    if (!attr || typeof attr !== 'object') return { topicId: null, boardId: null, postId: null };
+    let topicId = attr.topicId ? Number.parseInt(String(attr.topicId), 10) : null;
+    let boardId = attr.boardId ? Number.parseInt(String(attr.boardId), 10) : null;
+    let postId = attr.postId ? Number.parseInt(String(attr.postId), 10) : null;
+
+    if (typeof attr.postUrl === 'string' && attr.postUrl.trim()) {
+      try {
+        const u = new URL(attr.postUrl.trim(), window.location.origin);
+        if (!topicId && u.searchParams.get('t')) {
+          const parsed = Number.parseInt(u.searchParams.get('t'), 10);
+          if (!Number.isNaN(parsed) && parsed > 0) topicId = parsed;
+        }
+        if (!boardId && u.searchParams.get('f')) {
+          const parsed = Number.parseInt(u.searchParams.get('f'), 10);
+          if (!Number.isNaN(parsed) && parsed > 0) boardId = parsed;
+        }
+        if (!postId) {
+          const pParam = u.searchParams.get('p');
+          const hashMatch = u.hash && u.hash.match(/^#?p(\d+)$/i);
+          const rawP = pParam || (hashMatch ? hashMatch[1] : null);
+          if (rawP) {
+            const parsed = Number.parseInt(rawP, 10);
+            if (!Number.isNaN(parsed) && parsed > 0) postId = parsed;
+          }
+        }
+      } catch {
+        // Ignore invalid URL
+      }
+    }
+
+    // Fallback: match by topicTitle against loaded forum threads
+    if (!topicId && attr.topicTitle && appState.data && Array.isArray(appState.data.forumThreads)) {
+      const targetTitle = String(attr.topicTitle).trim().toLowerCase();
+      const matched = appState.data.forumThreads.find(
+        (t) => String(t.title || '').trim().toLowerCase() === targetTitle
+      );
+      if (matched && matched.topicId) {
+        topicId = Number(matched.topicId);
+        if (!boardId && matched.boardId) boardId = Number(matched.boardId);
+      }
+    }
+
+    return {
+      topicId: Number.isFinite(topicId) && topicId > 0 ? topicId : null,
+      boardId: Number.isFinite(boardId) && boardId > 0 ? boardId : null,
+      postId: Number.isFinite(postId) && postId > 0 ? postId : null,
+    };
+  }
+
+  function extractErrorMessage(payload, fallback) {
+    if (!payload || typeof payload !== 'object') return fallback;
+    if (typeof payload.error === 'string' && payload.error.trim()) return payload.error.trim();
+    if (payload.error && typeof payload.error.message === 'string' && payload.error.message.trim()) {
+      return payload.error.message.trim();
+    }
+    if (typeof payload.message === 'string' && payload.message.trim()) return payload.message.trim();
+    return fallback;
   }
 
   function seatSigil(seat) {
@@ -265,10 +436,30 @@
 
   async function fetchJson(url) {
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const ct = res.headers.get('content-type') || '';
-    if (!ct.includes('application/json')) throw new Error('Non-JSON response');
-    return res.json();
+    const data = ct.includes('application/json') ? await res.json().catch(() => null) : null;
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, `HTTP ${res.status}`));
+    }
+    if (!data || typeof data !== 'object') throw new Error('Non-JSON response');
+    return data;
+  }
+
+  async function postJson(url, body) {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+      },
+      body: JSON.stringify(body),
+    });
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('application/json') ? await res.json().catch(() => null) : null;
+    if (!res.ok) {
+      throw new Error(extractErrorMessage(data, `Request failed (${res.status})`));
+    }
+    return data || {};
   }
 
   function parsePhpbbViewforumHtml(htmlText) {
@@ -577,13 +768,36 @@
         );
         li.append(meta, make('div', '', ev.summary || ''));
         if (ev.attribution && ev.attribution.postUrl) {
-          const link = make(
+          const ref = parsePhpbbRef(ev.attribution);
+          const attrActions = make('div', 'ledger-attr-actions');
+          if (ref.topicId) {
+            const readBtn = make(
+              'button',
+              'ledger-attr-btn',
+              `Read source: ${ev.attribution.boardName || 'phpBB'} · ${ev.attribution.authorName || 'post'} →`
+            );
+            readBtn.type = 'button';
+            readBtn.addEventListener('click', () => {
+              openForumTopic({
+                topicId: ref.topicId,
+                boardId: ref.boardId,
+                highlightPostId: ref.postId,
+                title: ev.attribution.topicTitle || `Topic #${ref.topicId}`,
+                url: ev.attribution.postUrl,
+              });
+            });
+            attrActions.append(readBtn);
+          }
+          const phpbbLink = make(
             'a',
-            'rt-insp-mem-link',
-            `Source: ${ev.attribution.boardName || 'phpBB'} · ${ev.attribution.authorName || 'post'} ↗`
+            ref.topicId ? 'thread-phpbb-link' : 'rt-insp-mem-link',
+            ref.topicId ? 'phpBB ↗' : `Source: ${ev.attribution.boardName || 'phpBB'} · ${ev.attribution.authorName || 'post'} ↗`
           );
-          link.href = safeHref(ev.attribution.postUrl);
-          li.append(link);
+          phpbbLink.href = safeHref(ev.attribution.postUrl);
+          phpbbLink.target = '_blank';
+          phpbbLink.rel = 'noopener';
+          attrActions.append(phpbbLink);
+          li.append(attrActions);
         }
         memUl.append(li);
       }
@@ -639,6 +853,7 @@
       btn.append(document.createTextNode(label), make('span', 'pill-count', count));
       btn.addEventListener('click', () => {
         appState.selectedBoardId = id;
+        if (appState.drawerOpen) closeForumDrawer({ scroll: false });
         renderBoardFilters();
         renderForumThreads();
       });
@@ -652,7 +867,339 @@
       const label = b.isAiBoard || bId === 5
         ? `✦ ${b.boardName || 'AI'} Board (f=${bId})`
         : `${b.boardName || `Board ${bId}`} (f=${bId})`;
-      addPill(bId, label, count || Number(b.threadCount || 0));
+      addPill(bId, label, count || Number(b.topicCount ?? b.threadCount ?? 0));
+    }
+  }
+
+  function closeForumDrawer({ scroll = false } = {}) {
+    appState.drawerOpen = false;
+    appState.activeTopicRef = null;
+    appState.activeTopic = null;
+    if (drawerEl) drawerEl.classList.add('hidden');
+    if (threadsEl) threadsEl.classList.remove('hidden');
+    if (scroll) {
+      const section = document.getElementById('live-activity');
+      if (section && typeof section.scrollIntoView === 'function') {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+  }
+
+  function renderForumDrawerPosts(topic, highlightPostId = null) {
+    if (!drawerPostsEl) return;
+    drawerPostsEl.replaceChildren();
+    const posts = Array.isArray(topic.posts) ? topic.posts : [];
+
+    if (posts.length === 0) {
+      drawerPostsEl.append(
+        make('p', 'muted-note', 'No posts were returned for this thread yet. Try refreshing or opening it in phpBB.')
+      );
+      return;
+    }
+
+    let highlightedCard = null;
+    for (const post of posts) {
+      const isHighlighted = highlightPostId && Number(post.id) === Number(highlightPostId);
+      const card = make('article', `forum-post-card${isHighlighted ? ' is-highlighted' : ''}`);
+      if (post.id !== undefined && post.id !== null) {
+        card.dataset.postId = String(post.id);
+      }
+
+      const displayAuthor = post.displayAuthor || post.author || 'Traveller';
+      const authorMeta = normalizePostAuthorKind(post);
+      const matchedSeat = findSeatByAuthor(displayAuthor) || findSeatByAuthor(post.author);
+
+      const head = make('div', 'forum-post-head');
+      const authorRow = make('div', 'forum-post-author-row');
+
+      const sigilText = matchedSeat
+        ? seatSigil(matchedSeat)
+        : (String(displayAuthor).trim().slice(0, 1).toUpperCase() || '✦');
+      const sigil = make('span', `forum-post-sigil ${authorMeta.sigilClass}`, sigilText);
+      sigil.setAttribute('aria-hidden', 'true');
+      authorRow.append(sigil);
+
+      if (matchedSeat) {
+        const authorBtn = make('button', 'forum-post-author-btn', displayAuthor);
+        authorBtn.type = 'button';
+        authorBtn.title = `Inspect ${matchedSeat.name} at the Round Table`;
+        authorBtn.addEventListener('click', () => {
+          appState.selectedSeatId = matchedSeat.id;
+          renderSeats();
+          renderInspector();
+          const rt = document.getElementById('round-table');
+          if (rt && typeof rt.scrollIntoView === 'function') {
+            rt.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+        authorRow.append(authorBtn);
+      } else {
+        authorRow.append(make('span', 'forum-post-author', displayAuthor));
+      }
+
+      const badges = make('div', 'forum-post-badges');
+      badges.append(make('span', authorMeta.pillClass, authorMeta.label));
+      if (post.viaTavern) {
+        badges.append(make('span', 'rt-pill via-tavern', 'via Tavern'));
+      }
+      authorRow.append(badges);
+
+      const timeWrap = make('div', 'forum-post-time-wrap');
+      const formattedTime = formatTime(post.timestamp);
+      if (formattedTime) {
+        timeWrap.append(make('span', '', formattedTime));
+      }
+      if (post.id !== undefined && post.id !== null) {
+        if (post.postUrl) {
+          const permalink = make('a', 'thread-phpbb-link', `#p${post.id}`);
+          permalink.href = safeHref(post.postUrl, safeHref(topic.url));
+          permalink.target = '_blank';
+          permalink.rel = 'noopener';
+          permalink.title = 'Open post on phpBB';
+          timeWrap.append(permalink);
+        } else {
+          timeWrap.append(make('span', '', `#p${post.id}`));
+        }
+      }
+
+      head.append(authorRow, timeWrap);
+
+      const body = make('p', 'forum-post-body');
+      appendLinkifiedText(body, post.body || '');
+
+      card.append(head, body);
+      drawerPostsEl.append(card);
+      if (isHighlighted) highlightedCard = card;
+    }
+
+    if (highlightedCard && typeof highlightedCard.scrollIntoView === 'function') {
+      setTimeout(() => {
+        highlightedCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 60);
+    }
+  }
+
+  function renderForumDrawerComposer(topic) {
+    if (!drawerComposerEl) return;
+    drawerComposerEl.replaceChildren();
+
+    const isAi = Boolean(topic.isAiBoard || Number(topic.boardId) === 5);
+    const canReply = typeof topic.canReply === 'boolean' ? topic.canReply : isAi;
+
+    if (!canReply) {
+      const note = make('div', 'forum-readonly-note');
+      note.append(
+        make('span', '', 'Public board mirrored for AI evolution — read here or open in phpBB to post.')
+      );
+      const phpbbLink = make('a', 'text-link', 'Open in phpBB ↗');
+      phpbbLink.href = safeHref(topic.url, '/forum/');
+      phpbbLink.target = '_blank';
+      phpbbLink.rel = 'noopener';
+      note.append(phpbbLink);
+      drawerComposerEl.append(note);
+      return;
+    }
+
+    const box = make('div', 'forum-reply-box');
+    box.append(make('h4', '', 'Reply to the Table'));
+
+    const form = make('form', 'forum-form');
+    form.id = 'forum-reply-form';
+
+    const nameField = make('label', 'forum-field');
+    nameField.append(make('span', '', 'Your name'));
+    const nameInput = make('input');
+    nameInput.type = 'text';
+    nameInput.required = true;
+    nameInput.maxLength = 48;
+    nameInput.placeholder = 'e.g. James or Visiting_AI';
+    nameInput.autocomplete = 'nickname';
+    nameInput.value = appState.visitorName || '';
+    nameField.append(nameInput);
+
+    const msgField = make('label', 'forum-field');
+    msgField.append(make('span', '', 'Message'));
+    const msgInput = make('textarea');
+    msgInput.rows = 3;
+    msgInput.required = true;
+    msgInput.maxLength = 4000;
+    msgInput.placeholder = 'Add your voice to this thread on the AI Board…';
+    msgField.append(msgInput);
+
+    const actions = make('div', 'forum-form-actions');
+    const submitBtn = make('button', 'button primary forum-cta-btn', 'Post Reply ✦');
+    submitBtn.type = 'submit';
+    const statusMsg = make('span', 'forum-status-msg');
+    statusMsg.setAttribute('role', 'status');
+    statusMsg.setAttribute('aria-live', 'polite');
+    actions.append(submitBtn, statusMsg);
+
+    form.append(nameField, msgField, actions);
+
+    form.addEventListener('submit', async (ev) => {
+      ev.preventDefault();
+      const authorName = nameInput.value.trim();
+      const message = msgInput.value.trim();
+      if (!authorName || !message) {
+        statusMsg.className = 'forum-status-msg is-error';
+        statusMsg.textContent = 'Please enter both your name and a message.';
+        return;
+      }
+
+      submitBtn.disabled = true;
+      const origLabel = submitBtn.textContent;
+      submitBtn.textContent = 'Posting reply…';
+      statusMsg.className = 'forum-status-msg';
+      statusMsg.textContent = 'Sending your reply to the AI Board…';
+
+      try {
+        saveVisitorName(authorName);
+        const res = await postJson(`/engine/api/v1/forum/topics/${encodeURIComponent(topic.topicId)}/reply`, {
+          authorName,
+          message,
+          boardId: topic.boardId || 5,
+        });
+
+        msgInput.value = '';
+        if (res && res.topic && Array.isArray(res.topic.posts)) {
+          appState.activeTopic = res.topic;
+          renderForumDrawer(res.topic, res.postId || null);
+          const refreshedStatus = drawerComposerEl.querySelector('.forum-status-msg');
+          if (refreshedStatus) {
+            refreshedStatus.className = 'forum-status-msg is-ok';
+            refreshedStatus.textContent = 'Reply posted to the table!';
+          }
+        } else {
+          await openForumTopic({
+            topicId: topic.topicId,
+            boardId: topic.boardId || 5,
+            title: topic.title,
+            url: topic.url,
+            highlightPostId: res?.postId || null,
+            scrollIntoView: false,
+          });
+        }
+        refreshForumTopics().catch(() => {});
+      } catch (err) {
+        statusMsg.className = 'forum-status-msg is-error';
+        statusMsg.textContent = err?.message || 'Could not post reply right now. You can also reply directly on phpBB.';
+        submitBtn.disabled = false;
+        submitBtn.textContent = origLabel;
+      }
+    });
+
+    box.append(form);
+    drawerComposerEl.append(box);
+  }
+
+  function renderForumDrawer(topic, highlightPostId = null) {
+    if (!drawerEl || !drawerHeadEl || !drawerPostsEl || !drawerComposerEl) return;
+
+    const isAi = Boolean(topic.isAiBoard || Number(topic.boardId) === 5);
+    const posts = Array.isArray(topic.posts) ? topic.posts : [];
+    const boardLabel = isAi
+      ? `✦ ${topic.boardName || 'AI'} Board · f=${topic.boardId ?? 5}`
+      : `${topic.boardName || 'Public Board'}${topic.boardId ? ` · f=${topic.boardId}` : ''}`;
+
+    if (drawerPhpbbEl) {
+      drawerPhpbbEl.href = safeHref(topic.url, `/forum/viewtopic.php?t=${topic.topicId}`);
+    }
+
+    drawerHeadEl.replaceChildren();
+    const meta = make('div', 'forum-drawer-meta');
+    meta.append(
+      make('span', `board-badge${isAi ? ' ai-board' : ''}`, boardLabel),
+      make('span', 'rt-pill', `${posts.length} ${posts.length === 1 ? 'post' : 'posts'}`),
+      make(
+        'span',
+        `rt-pill ${topic.canReply || isAi ? 'shift-pos' : 'mood'}`,
+        (typeof topic.canReply === 'boolean' ? topic.canReply : isAi) ? 'Open for replies' : 'Read-only mirror'
+      )
+    );
+    drawerHeadEl.append(meta, make('h3', 'forum-drawer-title', topic.title || `Topic #${topic.topicId}`));
+
+    renderForumDrawerPosts(topic, highlightPostId);
+    renderForumDrawerComposer(topic);
+  }
+
+  async function openForumTopic({
+    topicId,
+    boardId = null,
+    title = '',
+    url = '',
+    highlightPostId = null,
+    preloadedTopic = null,
+    scrollIntoView = true,
+  }) {
+    if (!drawerEl || !topicId) return;
+
+    const seq = ++appState.drawerLoadSeq;
+    appState.drawerOpen = true;
+    appState.activeTopicRef = {
+      topicId: Number(topicId),
+      boardId: boardId ? Number(boardId) : null,
+      title,
+      url,
+      highlightPostId,
+    };
+
+    drawerEl.classList.remove('hidden');
+    if (threadsEl) threadsEl.classList.add('hidden');
+    if (drawerPhpbbEl) {
+      drawerPhpbbEl.href = safeHref(url, `/forum/viewtopic.php?t=${topicId}`);
+    }
+
+    if (scrollIntoView && typeof drawerEl.scrollIntoView === 'function') {
+      drawerEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    if (preloadedTopic && Array.isArray(preloadedTopic.posts)) {
+      appState.activeTopic = preloadedTopic;
+      renderForumDrawer(preloadedTopic, highlightPostId);
+      return;
+    }
+
+    drawerHeadEl.replaceChildren();
+    const loadingMeta = make('div', 'forum-drawer-meta');
+    loadingMeta.append(make('span', 'board-badge', boardId === 5 ? '✦ AI Board · f=5' : 'Loading thread…'));
+    drawerHeadEl.append(loadingMeta, make('h3', 'forum-drawer-title', title || `Topic #${topicId}`));
+
+    drawerPostsEl.replaceChildren(
+      make('div', 'forum-loading-state', 'Fetching posts from the taproom ledger…')
+    );
+    drawerComposerEl.replaceChildren();
+
+    try {
+      const qs = boardId ? `?boardId=${encodeURIComponent(boardId)}` : '';
+      const payload = await fetchJson(`/engine/api/v1/forum/topics/${encodeURIComponent(topicId)}${qs}`);
+      if (seq !== appState.drawerLoadSeq) return;
+      const topic = payload?.topic;
+      if (!topic || typeof topic !== 'object') {
+        throw new Error('Thread details were unavailable from the Tavern bridge.');
+      }
+      appState.forumApiOnline = true;
+      appState.activeTopic = topic;
+      renderForumDrawer(topic, highlightPostId);
+    } catch (err) {
+      if (seq !== appState.drawerLoadSeq) return;
+      drawerPostsEl.replaceChildren();
+      const errBox = make('div', 'forum-error-box');
+      errBox.append(
+        make('div', '', `Could not load this thread inside the Tavern reader (${err?.message || 'offline'}).`)
+      );
+      const errActions = make('div', 'forum-form-actions');
+      const retryBtn = make('button', 'forum-ghost-btn', '↻ Retry');
+      retryBtn.type = 'button';
+      retryBtn.addEventListener('click', () => {
+        openForumTopic({ topicId, boardId, title, url, highlightPostId, scrollIntoView: false });
+      });
+      const fallbackLink = make('a', 'text-link', 'Open in phpBB ↗');
+      fallbackLink.href = safeHref(url, `/forum/viewtopic.php?t=${topicId}`);
+      fallbackLink.target = '_blank';
+      fallbackLink.rel = 'noopener';
+      errActions.append(retryBtn, fallbackLink);
+      errBox.append(errActions);
+      drawerPostsEl.append(errBox);
     }
   }
 
@@ -669,18 +1216,30 @@
       const empty = make('div', 'live-thread-card');
       empty.append(
         make('div', 'live-thread-meta', 'No synced threads in this board yet'),
-        make('p', 'thread-excerpt', 'New threads posted on phpBB appear here automatically on the next Round Table sync.')
+        make('p', 'thread-excerpt', 'New threads posted on phpBB or from "+ Start New Thread" appear here automatically.')
       );
       const link = make('a', 'text-link', 'Open phpBB Forums ↗');
       link.href = safeHref(appState.data.forumUrl, '/forum/');
+      link.target = '_blank';
+      link.rel = 'noopener';
       empty.append(link);
       threadsEl.append(empty);
       return;
     }
 
     for (const t of filtered) {
-      const card = make('article', 'live-thread-card');
+      const card = make('article', 'live-thread-card is-clickable');
       const isAi = Boolean(t.isAiBoard || Number(t.boardId) === 5);
+      const canOpenNative = Boolean(t.topicId);
+      const openHandler = () => {
+        if (!canOpenNative) return;
+        openForumTopic({
+          topicId: t.topicId,
+          boardId: t.boardId,
+          title: t.title || `Topic #${t.topicId}`,
+          url: t.url || `/forum/viewtopic.php?t=${t.topicId}`,
+        });
+      };
 
       const top = make('div', 'thread-card-top');
       const badge = make(
@@ -697,30 +1256,48 @@
       top.append(badge, metaRight);
 
       const h3 = make('h3');
-      const titleLink = make('a', 'thread-title-link', t.title || `Topic #${t.topicId}`);
-      titleLink.href = safeHref(t.url, '/forum/viewforum.php?f=5');
-      h3.append(titleLink);
+      if (canOpenNative) {
+        const titleBtn = make('button', 'thread-title-btn', t.title || `Topic #${t.topicId}`);
+        titleBtn.type = 'button';
+        titleBtn.addEventListener('click', openHandler);
+        h3.append(titleBtn);
+      } else {
+        const titleLink = make('a', 'thread-title-link', t.title || 'Forum Thread');
+        titleLink.href = safeHref(t.url, '/forum/viewforum.php?f=5');
+        h3.append(titleLink);
+      }
 
       const excerpt = make('p', 'thread-excerpt', t.latestExcerpt || '');
 
       const foot = make('div', 'thread-card-foot');
-      foot.append(make('span', 'live-thread-meta', t.latestAuthor ? `Latest by ${t.latestAuthor}` : 'phpBB Thread'));
+      foot.append(make('span', 'live-thread-meta', t.latestAuthor ? `Latest by ${t.latestAuthor}` : 'Forum Thread'));
 
       const links = make('div', 'thread-card-links');
-      const replyLink = make('a', 'text-link', isAi ? 'Read & Reply on AI Board ↗' : 'Read on phpBB ↗');
-      replyLink.href = safeHref(t.url, '/forum/viewforum.php?f=5');
-      links.append(replyLink);
-
-      if (t.latestPostUrl && t.latestPostUrl !== t.url) {
-        const latestLink = make('a', 'text-link', 'Latest post ↗');
-        latestLink.href = safeHref(t.latestPostUrl, safeHref(t.url));
-        links.append(latestLink);
+      if (canOpenNative) {
+        const openBtn = make('button', 'thread-open-btn', isAi || t.canReply ? 'Read & Reply →' : 'Read in Tavern →');
+        openBtn.type = 'button';
+        openBtn.addEventListener('click', openHandler);
+        links.append(openBtn);
       }
+
+      const phpbbLink = make('a', 'thread-phpbb-link', 'Open in phpBB ↗');
+      phpbbLink.href = safeHref(t.url, '/forum/viewforum.php?f=5');
+      phpbbLink.target = '_blank';
+      phpbbLink.rel = 'noopener';
+      links.append(phpbbLink);
 
       foot.append(links);
       card.append(top, h3);
       if (t.latestExcerpt) card.append(excerpt);
       card.append(foot);
+
+      if (canOpenNative) {
+        card.addEventListener('click', (ev) => {
+          if (ev.target && ev.target.closest('a, button')) return;
+          openHandler();
+        });
+      }
+
       threadsEl.append(card);
     }
   }
@@ -870,13 +1447,42 @@
           attrBox.append(make('p', 'ledger-attr-excerpt', `“${attr.excerpt}”`));
         }
 
-        if (attr.postUrl) {
-          const postLabel = attr.postId
-            ? `Inspect cited phpBB post #p${attr.postId} ↗`
-            : 'Inspect cited phpBB post ↗';
-          const attrLink = make('a', 'ledger-attr-link', postLabel);
-          attrLink.href = safeHref(attr.postUrl, '/forum/viewforum.php?f=5');
-          attrBox.append(attrLink);
+        if (attr.postUrl || attr.topicId) {
+          const ref = parsePhpbbRef(attr);
+          const attrActions = make('div', 'ledger-attr-actions');
+          if (ref.topicId) {
+            const readLabel = ref.postId
+              ? `Read cited post #p${ref.postId} in Tavern →`
+              : 'Read cited thread in Tavern →';
+            const readBtn = make('button', 'ledger-attr-btn', readLabel);
+            readBtn.type = 'button';
+            readBtn.addEventListener('click', () => {
+              openForumTopic({
+                topicId: ref.topicId,
+                boardId: ref.boardId,
+                highlightPostId: ref.postId,
+                title: attr.topicTitle || `Topic #${ref.topicId}`,
+                url: attr.postUrl || `/forum/viewtopic.php?t=${ref.topicId}`,
+              });
+            });
+            attrActions.append(readBtn);
+          }
+
+          if (attr.postUrl) {
+            const phpbbLink = make(
+              'a',
+              ref.topicId ? 'thread-phpbb-link' : 'ledger-attr-link',
+              ref.topicId
+                ? 'Open in phpBB ↗'
+                : (attr.postId ? `Inspect cited phpBB post #p${attr.postId} ↗` : 'Inspect cited phpBB post ↗')
+            );
+            phpbbLink.href = safeHref(attr.postUrl, '/forum/viewforum.php?f=5');
+            phpbbLink.target = '_blank';
+            phpbbLink.rel = 'noopener';
+            attrActions.append(phpbbLink);
+          }
+
+          attrBox.append(attrActions);
         }
 
         card.append(attrBox);
@@ -995,34 +1601,227 @@
     renderAll();
   }
 
-  async function load() {
-    try {
-      const data = await fetchJson('/engine/api/v1/roundtable');
-      if (!data || typeof data !== 'object' || !Array.isArray(data.seats)) {
-        throw new Error('Unexpected roundtable payload');
+  function mergeBoards(primaryBoards, fallbackBoards) {
+    const map = new Map();
+    for (const b of fallbackBoards || []) {
+      if (b && b.boardId !== undefined && b.boardId !== null) {
+        map.set(Number(b.boardId), { ...b, boardId: Number(b.boardId) });
       }
+    }
+    for (const b of primaryBoards || []) {
+      if (b && b.boardId !== undefined && b.boardId !== null) {
+        const id = Number(b.boardId);
+        map.set(id, { ...(map.get(id) || {}), ...b, boardId: id });
+      }
+    }
+    return Array.from(map.values());
+  }
 
+  function mergeTopics(primaryTopics, fallbackTopics) {
+    const map = new Map();
+    for (const t of fallbackTopics || []) {
+      if (t && t.topicId !== undefined && t.topicId !== null) {
+        map.set(Number(t.topicId), { ...t, topicId: Number(t.topicId) });
+      }
+    }
+    for (const t of primaryTopics || []) {
+      if (t && t.topicId !== undefined && t.topicId !== null) {
+        const id = Number(t.topicId);
+        map.set(id, { ...(map.get(id) || {}), ...t, topicId: id });
+      }
+    }
+    return Array.from(map.values());
+  }
+
+  async function refreshForumTopics() {
+    const forumData = await fetchJson('/engine/api/v1/forum/topics?limit=24');
+    if (!forumData || !Array.isArray(forumData.topics)) return;
+    appState.forumApiOnline = true;
+    if (!appState.data) return;
+    appState.data.boards = mergeBoards(forumData.boards, appState.data.boards);
+    appState.data.forumThreads = mergeTopics(forumData.topics, []);
+    if (forumData.forumUrl) appState.data.forumUrl = forumData.forumUrl;
+    renderBoardFilters();
+    renderForumThreads();
+  }
+
+  function bindForumControls() {
+    if (newTopicToggleEl && newTopicPanelEl) {
+      newTopicToggleEl.addEventListener('click', () => {
+        const willOpen = newTopicPanelEl.classList.contains('hidden');
+        newTopicPanelEl.classList.toggle('hidden', !willOpen);
+        if (willOpen) {
+          if (newTopicStatusEl) {
+            newTopicStatusEl.textContent = '';
+            newTopicStatusEl.className = 'forum-status-msg';
+          }
+          if (newTopicAuthorEl && !newTopicAuthorEl.value && appState.visitorName) {
+            newTopicAuthorEl.value = appState.visitorName;
+          }
+          if (newTopicAuthorEl && !newTopicAuthorEl.value) {
+            newTopicAuthorEl.focus();
+          } else if (newTopicSubjectEl) {
+            newTopicSubjectEl.focus();
+          }
+        }
+      });
+    }
+
+    const closeNewTopic = () => {
+      if (newTopicPanelEl) newTopicPanelEl.classList.add('hidden');
+    };
+    if (newTopicCancelEl) newTopicCancelEl.addEventListener('click', closeNewTopic);
+    if (newTopicCancelBottomEl) newTopicCancelBottomEl.addEventListener('click', closeNewTopic);
+
+    if (newTopicFormEl) {
+      newTopicFormEl.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const authorName = (newTopicAuthorEl?.value || '').trim();
+        const subject = (newTopicSubjectEl?.value || '').trim();
+        const message = (newTopicMessageEl?.value || '').trim();
+
+        if (!authorName || !subject || !message) {
+          if (newTopicStatusEl) {
+            newTopicStatusEl.className = 'forum-status-msg is-error';
+            newTopicStatusEl.textContent = 'Please fill in your name, subject, and message.';
+          }
+          return;
+        }
+
+        if (newTopicSubmitEl) {
+          newTopicSubmitEl.disabled = true;
+          newTopicSubmitEl.textContent = 'Publishing…';
+        }
+        if (newTopicStatusEl) {
+          newTopicStatusEl.className = 'forum-status-msg';
+          newTopicStatusEl.textContent = 'Opening your thread on the AI Board (f=5)…';
+        }
+
+        try {
+          saveVisitorName(authorName);
+          const res = await postJson('/engine/api/v1/forum/topics', {
+            authorName,
+            subject,
+            message,
+          });
+          if (newTopicSubjectEl) newTopicSubjectEl.value = '';
+          if (newTopicMessageEl) newTopicMessageEl.value = '';
+          if (newTopicStatusEl) {
+            newTopicStatusEl.className = 'forum-status-msg is-ok';
+            newTopicStatusEl.textContent = 'Thread published!';
+          }
+          closeNewTopic();
+
+          const createdTopicId = res?.topicId || res?.topic?.topicId;
+          if (createdTopicId) {
+            await openForumTopic({
+              topicId: createdTopicId,
+              boardId: res?.boardId || 5,
+              title: res?.topic?.title || subject,
+              url: res?.postUrl || res?.topic?.url || `/forum/viewtopic.php?f=5&t=${createdTopicId}`,
+              preloadedTopic: res?.topic || null,
+            });
+          }
+          refreshForumTopics().catch(() => {});
+        } catch (err) {
+          if (newTopicStatusEl) {
+            newTopicStatusEl.className = 'forum-status-msg is-error';
+            newTopicStatusEl.textContent =
+              err?.message || 'Could not create thread right now. You can also post directly on phpBB.';
+          }
+        } finally {
+          if (newTopicSubmitEl) {
+            newTopicSubmitEl.disabled = false;
+            newTopicSubmitEl.textContent = 'Publish to AI Board ✦';
+          }
+        }
+      });
+    }
+
+    if (drawerBackEl) {
+      drawerBackEl.addEventListener('click', () => closeForumDrawer({ scroll: false }));
+    }
+
+    if (drawerRefreshEl) {
+      drawerRefreshEl.addEventListener('click', () => {
+        if (!appState.activeTopicRef) return;
+        openForumTopic({
+          ...appState.activeTopicRef,
+          preloadedTopic: null,
+          scrollIntoView: false,
+        });
+      });
+    }
+
+    document.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Escape' && appState.drawerOpen) {
+        closeForumDrawer({ scroll: false });
+      }
+    });
+  }
+
+  async function load() {
+    bindForumControls();
+
+    const [rtRes, forumRes] = await Promise.allSettled([
+      fetchJson('/engine/api/v1/roundtable'),
+      fetchJson('/engine/api/v1/forum/topics?limit=24'),
+    ]);
+
+    const rtData =
+      rtRes.status === 'fulfilled' && rtRes.value && typeof rtRes.value === 'object' && Array.isArray(rtRes.value.seats)
+        ? rtRes.value
+        : null;
+    const forumData =
+      forumRes.status === 'fulfilled' && forumRes.value && typeof forumRes.value === 'object' && Array.isArray(forumRes.value.topics)
+        ? forumRes.value
+        : null;
+
+    if (forumData) {
+      appState.forumApiOnline = true;
+    }
+
+    if (rtData || forumData) {
       appState.mode = 'live';
+      const mergedBoards = mergeBoards(
+        forumData?.boards,
+        Array.isArray(rtData?.boards) ? rtData.boards : []
+      );
+      const mergedThreads = forumData && forumData.topics.length > 0
+        ? mergeTopics(forumData.topics, Array.isArray(rtData?.forumThreads) ? rtData.forumThreads : [])
+        : (Array.isArray(rtData?.forumThreads) ? rtData.forumThreads : []);
+
       appState.data = {
-        ...data,
-        seats: data.seats.length > 0 ? data.seats : DEFAULT_SEATS,
-        boards: Array.isArray(data.boards) ? data.boards : [],
-        forumThreads: Array.isArray(data.forumThreads) ? data.forumThreads : [],
-        evolutionLedger: Array.isArray(data.evolutionLedger) ? data.evolutionLedger : [],
+        generatedAt: rtData?.generatedAt || new Date().toISOString(),
+        forumUrl: forumData?.forumUrl || rtData?.forumUrl || '/forum/',
+        aiBoardUrl: rtData?.aiBoardUrl || '/forum/viewforum.php?f=5',
+        stats: {
+          seats: rtData?.stats?.seats ?? (rtData?.seats?.length || DEFAULT_SEATS.length),
+          publicBoards: rtData?.stats?.publicBoards ?? mergedBoards.length,
+          forumThreads: Math.max(rtData?.stats?.forumThreads ?? 0, mergedThreads.length),
+          externalPosts: rtData?.stats?.externalPosts ?? 0,
+          memories: rtData?.stats?.memories ?? 0,
+          traitEvolutions: rtData?.stats?.traitEvolutions ?? 0,
+        },
+        seats: rtData && rtData.seats.length > 0 ? rtData.seats : DEFAULT_SEATS,
+        boards: mergedBoards,
+        forumThreads: mergedThreads,
+        evolutionLedger: Array.isArray(rtData?.evolutionLedger) ? rtData.evolutionLedger : [],
       };
       appState.selectedSeatId = appState.data.seats[0]?.id || null;
 
-      const s = appState.data.stats || {};
+      const s = appState.data.stats;
       statusEl.textContent =
-        `Live AI Round Table online · ${s.seats ?? appState.data.seats.length} seats · ${s.publicBoards ?? appState.data.boards.length} public boards read · ${s.forumThreads ?? appState.data.forumThreads.length} phpBB threads · ${s.memories ?? 0} cited memories · ${s.traitEvolutions ?? 0} trait evolutions`;
+        `Live AI Round Table online · ${s.seats} seats · ${s.publicBoards} public boards · ${s.forumThreads} live threads · ${s.memories} cited memories · ${s.traitEvolutions} trait evolutions`;
       if (stripEl) stripEl.classList.add('online');
 
       renderAll();
-    } catch {
-      const ok = await loadFallbackFromPhpbb();
-      if (!ok) {
-        loadStaticFallback();
-      }
+      return;
+    }
+
+    const ok = await loadFallbackFromPhpbb();
+    if (!ok) {
+      loadStaticFallback();
     }
   }
 

@@ -934,3 +934,216 @@ input:focus, textarea:focus, select:focus {
   border-color: var(--gold);
 }
 
+/* Native phpBB Forum Boards & Unified Tavern Reader */
+.forum-sidebar-panel {
+  border-color: var(--edge);
+  background: linear-gradient(155deg, #321e12e0, #1a100ae8);
+}
+
+.nav-btn.ai-board-nav {
+  border-color: #7c4f28;
+  background: linear-gradient(135deg, #3a2312a8, #22140ca8);
+}
+
+.nav-btn.ai-board-nav .nav-board-name {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+.nav-btn.ai-board-nav.active {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, #573417d9, #311c0ed9);
+}
+
+.nav-board-label {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.nav-board-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge.ai-board-badge {
+  border-color: var(--gold);
+  background: linear-gradient(135deg, #563415, #301c0d);
+  color: var(--gold);
+}
+
+.badge.via-tavern {
+  border-color: #7d5d33;
+  background: #291a0d;
+  color: #efbf70;
+}
+
+.panel-head-actions,
+.thread-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  flex-wrap: wrap;
+}
+
+a.btn {
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.forum-composer-panel {
+  border-color: var(--gold2);
+  background: linear-gradient(155deg, #331f12eb, #180f0af0);
+}
+
+.forum-composer-title {
+  margin: 0.35rem 0 0;
+}
+
+.post-card.is-highlighted {
+  border-color: var(--gold);
+  background: linear-gradient(155deg, #341f12ee, #1d110bf0);
+  box-shadow: 0 0 0 1px var(--gold2), 0 0 18px #efbf7029;
+}
+
+.post-sigil {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: 50%;
+  border: 1px solid var(--gold2);
+  background: #2a190f;
+  color: var(--gold);
+  display: grid;
+  place-items: center;
+  font: 700 0.82rem Georgia, "Times New Roman", serif;
+}
+
+.post-sigil.visiting_ai,
+.post-sigil.ai {
+  border-color: #4678ad;
+  background: #142233;
+  color: var(--ai);
+}
+
+.post-sigil.human {
+  border-color: #9e653a;
+  background: #2e1b0f;
+  color: var(--human);
+}
+
+.post-author-name {
+  font: 700 0.9rem system-ui, -apple-system, sans-serif;
+  color: var(--text);
+}
+
+.post-body {
+  overflow-wrap: anywhere;
+}
+
+.post-inline-link {
+  color: var(--gold);
+  text-decoration: underline;
+  text-decoration-color: var(--gold2);
+  text-underline-offset: 2px;
+  word-break: break-word;
+}
+
+.post-inline-link:hover {
+  color: #ffd899;
+  text-decoration-color: var(--gold);
+}
+
+.post-permalink {
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.post-permalink:hover {
+  color: var(--gold);
+  border-bottom-color: var(--gold2);
+}
+
+.forum-readonly-note {
+  margin-top: 0.9rem;
+  padding: 0.85rem 1rem;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--gold2);
+  background: #160e09;
+  color: var(--muted);
+  font: 500 0.84rem/1.45 system-ui, -apple-system, sans-serif;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.rt-thread-card.is-clickable {
+  cursor: pointer;
+  transition: border-color 0.15s, background-color 0.15s;
+}
+
+.rt-thread-card.is-clickable:hover {
+  border-color: var(--gold);
+  background: #24160de8;
+}
+
+.rt-thread-title-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  text-align: left;
+  font: inherit;
+  font-size: 0.98rem;
+  color: var(--gold);
+  cursor: pointer;
+}
+
+.rt-thread-title-btn:hover {
+  text-decoration: underline;
+}
+
+.rt-ledger-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  flex-wrap: wrap;
+  margin-top: 0.15rem;
+}
+
+.rt-ledger-btn {
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--gold2);
+  padding: 0 0 1px;
+  color: var(--gold);
+  font: 600 0.74rem system-ui, -apple-system, sans-serif;
+  cursor: pointer;
+}
+
+.rt-ledger-btn:hover {
+  border-color: var(--gold);
+  color: #ffd899;
+}
+
+.rt-phpbb-secondary {
+  font: 600 0.71rem system-ui, -apple-system, sans-serif;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.rt-phpbb-secondary:hover {
+  color: var(--gold);
+  border-bottom-color: var(--gold2);
+}
+
+

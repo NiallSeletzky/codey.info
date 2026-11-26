@@ -581,7 +581,7 @@ test('Remote MCP Streamable HTTP server (/engine/mcp) supports initialize, tools
 
   // 3. tools/list & read-only tools/call (no auth required)
   const listed = await rpc({ jsonrpc: '2.0', id: 2, method: 'tools/list' });
-  assert.equal(listed.json.result.tools.length, 10);
+  assert.equal(listed.json.result.tools.length, 13);
 
   const rtCall = await rpc({
     jsonrpc: '2.0',
@@ -677,4 +677,202 @@ test('Remote MCP Streamable HTTP server (/engine/mcp) supports initialize, tools
 
   const badMethod = await rpc({ jsonrpc: '2.0', id: 12, method: 'unknown/method' });
   assert.equal(badMethod.json.error.code, -32601);
+});
+
+test('Live phpBB Forum Bridge (/api/v1/forum/* & MCP) reads all boards, relays f=5 topics/replies, and blocks non-AI writes', async (t) => {
+  const { PhpBbClient } = await import('../agents/phpbb-client.mjs');
+
+  const users = new Map();
+  const boardTopics = new Map([
+    [
+      3,
+      [
+        {
+          id: 30,
+          title: 'Common Room Announcement',
+          posts: [{ id: 301, author: 'James', body: 'Welcome humans to the common room!' }],
+        },
+      ],
+    ],
+    [
+      5,
+      [
+        {
+          id: 50,
+          title: 'AI Board Fireside',
+          posts: [{ id: 501, author: 'Neo_AI', body: 'The lanterns are lit on the AI board.' }],
+        },
+      ],
+    ],
+  ]);
+  let nextTopicId = 60;
+  let nextPostId = 700;
+  let currentUser = null;
+  const writeBoards = [];
+
+  const phpbbStub = http.createServer(async (req, res) => {
+    const chunks = [];
+    for await (const c of req) chunks.push(c);
+    const params = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+    const u = new URL(req.url, 'http://127.0.0.1');
+
+    if (u.pathname === '/index.php') {
+      return res.end(
+        '<a href="./viewforum.php?f=3" class="forumtitle">The Common Room</a>' +
+          '<a href="./viewforum.php?f=5" class="forumtitle">AI</a>'
+      );
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'register') {
+      if (req.method === 'GET') return res.end('<form id="agreement" action="./ucp.php?mode=register"></form>');
+      if (params.get('agreed') && !params.get('username')) return res.end('<form id="register" action="./ucp.php?mode=register"></form>');
+      users.set(params.get('username'), params.get('new_password'));
+      return res.end('<div id="message">Thank you for registering, your account has been created.</div>');
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('mode') === 'login') {
+      if (req.method === 'GET') return res.end('<form id="login" action="./ucp.php?mode=login"></form>');
+      if (users.get(params.get('username')) === params.get('password')) {
+        currentUser = params.get('username');
+        res.writeHead(200, { 'content-type': 'text/html', 'set-cookie': `sid=${currentUser}; Path=/` });
+        return res.end(`<a href="ucp.php?mode=logout">Logout [ ${currentUser} ]</a>`);
+      }
+      return res.end('<div class="error">Invalid</div>');
+    }
+    if (u.pathname === '/ucp.php' && u.searchParams.get('i') === 'ucp_groups') {
+      if (req.method === 'GET') return res.end('<form id="ucp" action="./ucp.php?i=ucp_groups&amp;mode=membership"><input type="radio" name="selected" value="9"></form>');
+      if (params.get('confirm') === 'Yes') return res.end('<div id="message">Successfully joined selected group.</div>');
+      return res.end('<form id="confirm" action="./ucp.php?i=ucp_groups&amp;mode=membership"></form>');
+    }
+    if (u.pathname === '/viewforum.php') {
+      const f = Number(u.searchParams.get('f'));
+      const list = boardTopics.get(f) || [];
+      return res.end(
+        list.map((tp) => `<a href="./viewtopic.php?f=${f}&amp;t=${tp.id}" class="topictitle">${tp.title}</a>`).join('\n')
+      );
+    }
+    if (u.pathname === '/viewtopic.php') {
+      const tid = Number(u.searchParams.get('t'));
+      const tp = [...boardTopics.values()].flat().find((x) => x.id === tid);
+      const blocks = (tp?.posts || [])
+        .map((p) => `<div id="p${p.id}" class="post"><a class="username">${p.author}</a><div class="content">${p.body}</div></div>`)
+        .join('\n');
+      return res.end(`<h2 class="topic-title">${tp?.title || 'Unknown'}</h2>${blocks}`);
+    }
+    if (u.pathname === '/posting.php') {
+      const mode = u.searchParams.get('mode');
+      const f = Number(u.searchParams.get('f'));
+      if (req.method === 'GET') {
+        const action = mode === 'post' ? `./posting.php?mode=post&amp;f=${f}` : `./posting.php?mode=reply&amp;f=${f}&amp;t=${u.searchParams.get('t')}`;
+        return res.end(`<form id="postform" action="${action}"></form>`);
+      }
+      writeBoards.push(f);
+      if (mode === 'post') {
+        const tid = nextTopicId++;
+        const pid = nextPostId++;
+        boardTopics.get(f).unshift({
+          id: tid,
+          title: params.get('subject'),
+          posts: [{ id: pid, author: currentUser, body: params.get('message') }],
+        });
+        return res.end(`<a href="./viewtopic.php?f=${f}&amp;t=${tid}">View your submitted message</a>`);
+      }
+      const tid = Number(u.searchParams.get('t'));
+      const pid = nextPostId++;
+      const tp = (boardTopics.get(f) || []).find((x) => x.id === tid);
+      tp.posts.push({ id: pid, author: currentUser, body: params.get('message') });
+      return res.end(`<div id="p${pid}" class="post">Posted</div>`);
+    }
+    res.writeHead(404);
+    res.end();
+  });
+
+  phpbbStub.listen(0, '127.0.0.1');
+  await once(phpbbStub, 'listening');
+  t.after(() => new Promise((resolve) => phpbbStub.close(resolve)));
+  const stubForumUrl = `http://127.0.0.1:${phpbbStub.address().port}`;
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-bridge-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const store = new TavernStore(path.join(dir, 'tavern.db'));
+  const llm = createLlmProvider({ provider: 'mock' });
+  const app = createTavernServer({
+    store,
+    llm,
+    basePath: '/engine',
+    forumUrl: stubForumUrl,
+    aiBoardId: 5,
+    agentStatePath: path.join(dir, 'phpbb-agents.json'),
+    enableForumBridge: true,
+    forumWriteCooldownMs: 0,
+    forumClientFactory: () => new PhpBbClient({ baseUrl: stubForumUrl, formDelayMs: 0 }),
+  });
+  app.server.listen(0, '127.0.0.1');
+  await once(app.server, 'listening');
+  t.after(() => app.close());
+  const base = `http://127.0.0.1:${app.server.address().port}/engine`;
+
+  // 1. Live boards & topics endpoints
+  const boardsRes = await fetch(`${base}/api/v1/forum/boards`);
+  assert.equal(boardsRes.status, 200);
+  const boardsData = await boardsRes.json();
+  assert.equal(boardsData.boards[0].boardId, 5);
+  assert.equal(boardsData.boards[0].canPost, true);
+  assert.equal(boardsData.boards.find((b) => b.boardId === 3).canPost, false);
+
+  const topicsRes = await fetch(`${base}/api/v1/forum/topics`);
+  assert.equal(topicsRes.status, 200);
+  const topicsData = await topicsRes.json();
+  assert.equal(topicsData.topics.length, 2);
+
+  // 2. Native reply to f=5 relays cleanly with attribution & parses back to human displayAuthor
+  const replyRes = await fetch(`${base}/api/v1/forum/topics/50/reply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ authorName: 'James', message: 'Posting straight from the Tavern frontend!' }),
+  });
+  assert.equal(replyRes.status, 201);
+  const replyData = await replyRes.json();
+  assert.equal(replyData.ok, true);
+  assert.equal(replyData.topic.posts.length, 2);
+  assert.equal(replyData.topic.posts[1].displayAuthor, 'James');
+  assert.equal(replyData.topic.posts[1].authorKind, 'human');
+  assert.equal(replyData.topic.posts[1].viaTavern, true);
+  assert.equal(replyData.topic.posts[1].body, 'Posting straight from the Tavern frontend!');
+
+  // 3. Starting a new topic in f=5 works; attempting to write to read-only board f=3 returns 403!
+  const newTopicRes = await fetch(`${base}/api/v1/forum/topics`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      authorName: 'James',
+      subject: 'New native Tavern thread',
+      message: 'Started right inside the warm Rusty Flagon UI!',
+    }),
+  });
+  assert.equal(newTopicRes.status, 201);
+  const newTopicData = await newTopicRes.json();
+  assert.equal(newTopicData.topicId, 60);
+
+  const blockedReply = await fetch(`${base}/api/v1/forum/topics/30/reply`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ authorName: 'James', message: 'Should be blocked on f=3', boardId: 5 }),
+  });
+  assert.equal(blockedReply.status, 403);
+  assert.deepEqual(writeBoards, [5, 5]); // Never wrote to board 3!
+
+  // 4. Remote MCP forum tools (list_forum_topics + read_forum_topic)
+  const mcpList = await fetch(`${base}/mcp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      jsonrpc: '2.0',
+      id: 100,
+      method: 'tools/call',
+      params: { name: 'read_forum_topic', arguments: { topicId: 50 } },
+    }),
+  });
+  const mcpListJson = await mcpList.json();
+  assert.equal(mcpListJson.result.isError, false);
+  assert.equal(mcpListJson.result.structuredContent.topic.posts.length, 2);
 });

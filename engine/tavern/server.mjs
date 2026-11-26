@@ -3,6 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderAgentManifest, renderLlmsTxt, renderOpenApiSpec } from './discovery.mjs';
+import { createForumBridge, ForumBridgeError } from './forum-bridge.mjs';
 import { createLlmProvider, LlmProviderError } from './llm.mjs';
 import { runTavernRound } from './loop.mjs';
 import { createMcpHandler } from './mcp.mjs';
@@ -109,13 +110,47 @@ export function createTavernServer({
   adminToken = process.env.TAVERN_ADMIN_TOKEN || '',
   fandomStatePath = process.env.FORUM_FANDOM_STATE_PATH ||
     path.join(__dirname, '..', 'data', 'forum-fandoms.json'),
+  agentStatePath,
   forumUrl = process.env.FORUM_URL || 'https://codey.info/forum',
   aiBoardId = Number(process.env.FORUM_AI_BOARD_ID || 5),
+  forumGroupId = Number(process.env.FORUM_AI_GROUP_ID || 9),
+  forumBridge = null,
+  forumClientFactory = null,
+  enableForumBridge,
+  forumCacheTtlMs = 60_000,
+  forumWriteCooldownMs = 3000,
   rateLimits = {},
 } = {}) {
   const tavernStore = store || new TavernStore(path.join(__dirname, '..', 'data', 'tavern.db'));
   const llmProvider = llm || createLlmProvider();
   const normalizedBasePath = basePath.replace(/\/+$/, '');
+  const isLiveForumBridge =
+    enableForumBridge === false
+      ? false
+      : enableForumBridge === true ||
+        Boolean(forumBridge) ||
+        Boolean(forumClientFactory) ||
+        tavernStore.dbPath !== ':memory:';
+  const resolvedAgentStatePath =
+    agentStatePath !== undefined
+      ? agentStatePath
+      : process.env.FORUM_AGENT_STATE_PATH ||
+        (tavernStore.dbPath === ':memory:'
+          ? null
+          : path.join(__dirname, '..', 'data', 'phpbb-agents.json'));
+  const bridge =
+    forumBridge ||
+    createForumBridge({
+      store: tavernStore,
+      forumUrl,
+      aiBoardId,
+      groupId: forumGroupId,
+      agentStatePath: resolvedAgentStatePath,
+      cacheTtlMs: forumCacheTtlMs,
+      writeCooldownMs: forumWriteCooldownMs,
+      liveEnabled: isLiveForumBridge,
+      clientFactory: forumClientFactory,
+    });
   const limits = {
     postsPerHour: Number(rateLimits.postsPerHour ?? 30),
     postsPerDay: Number(rateLimits.postsPerDay ?? 120),
@@ -129,9 +164,10 @@ export function createTavernServer({
     ),
   };
 
-  // Sliding windows for per-IP registration, guest posting, and round budget caps.
+  // Sliding windows for per-IP registration, guest posting, forum relay, and round budget caps.
   const regWindow = new Map();
   const guestPostWindow = new Map();
+  const forumPostWindow = new Map();
   const roundTimestamps = [];
   const roundByIp = new Map();
 
@@ -207,6 +243,23 @@ export function createTavernServer({
     }
   }
 
+  function checkForumPostingLimit(characterId) {
+    checkPostingLimit(characterId);
+    const now = Date.now();
+    const hourAgo = now - 3600_000;
+    const dayAgo = now - 86400_000;
+    const list = (forumPostWindow.get(characterId) || []).filter((ts) => ts >= dayAgo);
+    const recentHour = list.filter((ts) => ts >= hourAgo).length;
+    if (recentHour + tavernStore.countRecentPosts(characterId, 3600_000) >= limits.postsPerHour) {
+      throw new TavernStoreError('rate_limited', 'Hourly posting rate limit reached', 429);
+    }
+    if (list.length + tavernStore.countRecentPosts(characterId, 86400_000) >= limits.postsPerDay) {
+      throw new TavernStoreError('rate_limited', 'Daily posting rate limit reached', 429);
+    }
+    list.push(now);
+    forumPostWindow.set(characterId, list);
+  }
+
   function requireAgentAuth(req) {
     const token = extractBearerToken(req);
     if (!token) {
@@ -256,6 +309,7 @@ export function createTavernServer({
     fandomStatePath,
     forumUrl,
     aiBoardId,
+    forumBridge: bridge,
     checkRegistrationRateLimit: (ip) => {
       try {
         checkRegistrationLimit(ip);
@@ -463,16 +517,95 @@ export function createTavernServer({
         }
         const limitParam = parsedUrl.searchParams.get('limit');
         const limit = limitParam !== null ? Number(limitParam) : 16;
-        return sendJson(
-          res,
-          200,
-          tavernStore.getRoundTable({
-            fandomStatePath,
-            forumUrl,
-            aiBoardId,
-            limit: Number.isFinite(limit) && limit > 0 ? limit : 16,
-          })
-        );
+        const safeLimit = Number.isFinite(limit) && limit > 0 ? limit : 16;
+        const roundtable = tavernStore.getRoundTable({
+          fandomStatePath,
+          forumUrl,
+          aiBoardId,
+          limit: safeLimit,
+        });
+        if (
+          roundtable.boards.length === 0 &&
+          roundtable.forumThreads.length === 0 &&
+          bridge.liveEnabled
+        ) {
+          try {
+            const live = await bridge.listTopics({ limit: safeLimit });
+            if (Array.isArray(live.boards) && live.boards.length > 0) {
+              roundtable.boards = live.boards.map((b) => ({
+                boardId: b.boardId,
+                boardName: b.boardName,
+                threadCount: b.topicCount,
+                postCount: b.topicCount,
+                url: b.url,
+                isAiBoard: b.isAiBoard,
+                canPost: b.canPost,
+              }));
+              roundtable.stats.publicBoards = roundtable.boards.length;
+            }
+            if (Array.isArray(live.topics) && live.topics.length > 0) {
+              roundtable.forumThreads = live.topics;
+              roundtable.stats.forumThreads = roundtable.forumThreads.length;
+            }
+          } catch {
+            // Keep offline SQLite roundtable response if live phpBB fetch fails.
+          }
+        }
+        return sendJson(res, 200, roundtable);
+      }
+
+      // ---- Live Bidirectional phpBB Forum Bridge (/api/v1/forum/*) ----
+      if (method === 'GET' && pathname === '/api/v1/forum/boards') {
+        const result = await bridge.listBoards();
+        return sendJson(res, 200, result);
+      }
+      if (method === 'GET' && pathname === '/api/v1/forum/topics') {
+        const boardIdParam = parsedUrl.searchParams.get('boardId');
+        const limitParam = parsedUrl.searchParams.get('limit');
+        const result = await bridge.listTopics({
+          boardId: boardIdParam !== null && boardIdParam !== '' ? boardIdParam : null,
+          limit: limitParam !== null && limitParam !== '' ? Number(limitParam) : 24,
+        });
+        return sendJson(res, 200, result);
+      }
+      if (method === 'POST' && pathname === '/api/v1/forum/topics') {
+        const body = await readJsonBody(req);
+        const { character: author, isGuest } = resolvePostAuthor(req, body);
+        if (isGuest) checkGuestIpLimit(resolveClientIp(req));
+        checkForumPostingLimit(author.id);
+        const created = await bridge.createTopic({
+          boardId: body.boardId,
+          subject: body.subject,
+          message: body.message,
+          authorName: author.name,
+          authorKind: author.kind,
+        });
+        return sendJson(res, 201, created);
+      }
+
+      const forumTopicMatch = pathname.match(/^\/api\/v1\/forum\/topics\/(\d+)$/);
+      if (method === 'GET' && forumTopicMatch) {
+        const boardIdParam = parsedUrl.searchParams.get('boardId');
+        const result = await bridge.readTopic(Number(forumTopicMatch[1]), {
+          boardId: boardIdParam !== null && boardIdParam !== '' ? boardIdParam : null,
+        });
+        return sendJson(res, 200, result);
+      }
+
+      const forumReplyMatch = pathname.match(/^\/api\/v1\/forum\/topics\/(\d+)\/reply$/);
+      if (method === 'POST' && forumReplyMatch) {
+        const body = await readJsonBody(req);
+        const { character: author, isGuest } = resolvePostAuthor(req, body);
+        if (isGuest) checkGuestIpLimit(resolveClientIp(req));
+        checkForumPostingLimit(author.id);
+        const replied = await bridge.replyToTopic({
+          topicId: Number(forumReplyMatch[1]),
+          boardId: body.boardId,
+          message: body.message,
+          authorName: author.name,
+          authorKind: author.kind,
+        });
+        return sendJson(res, 201, replied);
       }
 
       // ---- Boards, Threads & Posts ----
@@ -648,7 +781,7 @@ export function createTavernServer({
         error: { code: 'not_found', message: `No route for ${method} ${pathname}` },
       });
     } catch (error) {
-      if (error instanceof TavernStoreError) {
+      if (error instanceof TavernStoreError || error instanceof ForumBridgeError) {
         const extraHeaders = error.retryAfter ? { 'Retry-After': String(error.retryAfter) } : {};
         return sendJson(
           res,
@@ -672,6 +805,7 @@ export function createTavernServer({
     server,
     store: tavernStore,
     llm: llmProvider,
+    forumBridge: bridge,
     close: () =>
       new Promise((resolve) => {
         server.close(() => {

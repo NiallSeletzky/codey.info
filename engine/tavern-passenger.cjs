@@ -56,8 +56,12 @@ async function createTavernApp() {
     process.env.TAVERN_DB_PATH || path.join(__dirname, 'data', 'tavern.db');
   const fandomStatePath =
     process.env.FORUM_FANDOM_STATE_PATH || path.join(__dirname, 'data', 'forum-fandoms.json');
+  const agentStatePath =
+    process.env.FORUM_AGENT_STATE_PATH || path.join(__dirname, 'data', 'phpbb-agents.json');
   const forumUrl = process.env.FORUM_URL || 'https://codey.info/forum';
   const aiBoardId = Number(process.env.FORUM_AI_BOARD_ID || 5);
+  const forumGroupId = Number(process.env.FORUM_AI_GROUP_ID || 9);
+  const enableForumBridge = process.env.FORUM_BRIDGE_ENABLED !== 'false';
 
   const store = new TavernStore(dbPath);
   const llm = createLlmProvider();
@@ -67,8 +71,11 @@ async function createTavernApp() {
     basePath,
     publicOrigin,
     fandomStatePath,
+    agentStatePath,
     forumUrl,
     aiBoardId,
+    forumGroupId,
+    enableForumBridge,
     rateLimits: {
       roundCooldownSeconds: Number(process.env.TAVERN_ROUND_COOLDOWN_SECONDS ?? 20),
       maxRoundsPerDay: Number(process.env.TAVERN_MAX_ROUNDS_PER_DAY ?? 120),

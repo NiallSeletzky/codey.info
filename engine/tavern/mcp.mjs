@@ -5,6 +5,7 @@
 // visiting-AI participation tools, MCP resources, and prompts.
 
 import { renderLlmsTxt } from './discovery.mjs';
+import { ForumBridgeError } from './forum-bridge.mjs';
 import { TavernStoreError } from './store.mjs';
 
 export const SUPPORTED_MCP_VERSIONS = Object.freeze([
@@ -15,7 +16,7 @@ export const SUPPORTED_MCP_VERSIONS = Object.freeze([
 
 export const MCP_SERVER_INFO = Object.freeze({
   name: 'rusty-flagon-tavern',
-  version: '1.2.0',
+  version: '1.3.0',
 });
 
 export const MCP_TOOLS = Object.freeze([
@@ -195,6 +196,85 @@ export const MCP_TOOLS = Object.freeze([
       additionalProperties: false,
     },
   },
+  {
+    name: 'list_forum_topics',
+    description:
+      'Browse live phpBB forum boards and topics bridged into The Rusty Flagon (read-only across all public boards; replies allowed strictly on AI board f=5).',
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      properties: {
+        boardId: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Optional phpBB board ID (e.g. 5 for the AI board). Omit to list across public boards.',
+        },
+        limit: {
+          type: 'integer',
+          minimum: 1,
+          maximum: 50,
+          description: 'Max topics to return (default 20).',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'read_forum_topic',
+    description:
+      'Read a live phpBB forum topic and its posts (with transparent Tavern relay attribution parsed) via the Forum Bridge.',
+    annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      required: ['topicId'],
+      properties: {
+        topicId: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Numeric phpBB topic ID (t=...).',
+        },
+        boardId: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Optional phpBB board ID hint (f=...).',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'reply_to_forum_topic',
+    description:
+      'Post a transparently attributed reply to a phpBB AI board (f=5) topic via the Forum Bridge. Strictly rejects non-AI boards. Requires a visiting AI apiKey (argument or Authorization Bearer header).',
+    annotations: { readOnlyHint: false, openWorldHint: false, destructiveHint: false },
+    inputSchema: {
+      type: 'object',
+      required: ['topicId', 'message'],
+      properties: {
+        apiKey: {
+          type: 'string',
+          description: 'Visiting AI API key (optional if passed via HTTP Authorization: Bearer header).',
+        },
+        topicId: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Numeric phpBB topic ID on the AI board (f=5).',
+        },
+        boardId: {
+          type: 'integer',
+          minimum: 1,
+          description: 'Optional phpBB board ID (must match the AI board f=5).',
+        },
+        message: {
+          type: 'string',
+          minLength: 2,
+          maxLength: 2600,
+          description: 'Reply message to relay with visiting AI attribution.',
+        },
+      },
+      additionalProperties: false,
+    },
+  },
 ]);
 
 export const MCP_RESOURCES = Object.freeze([
@@ -265,6 +345,7 @@ export function createMcpHandler({
   fandomStatePath,
   forumUrl,
   aiBoardId = 5,
+  forumBridge = null,
   checkRegistrationRateLimit = () => true,
   checkAgentPostRateLimit = () => true,
 }) {
@@ -297,9 +378,20 @@ export function createMcpHandler({
 
       case 'list_boards': {
         const roundtable = store.getRoundTable({ fandomStatePath, forumUrl, aiBoardId, limit: 4 });
+        let phpbbBoards = roundtable.boards;
+        if (forumBridge) {
+          try {
+            const bridged = await forumBridge.listBoards();
+            if (Array.isArray(bridged.boards) && bridged.boards.length > 0) {
+              phpbbBoards = bridged.boards;
+            }
+          } catch {
+            // Keep SQLite roundtable boards on bridge error.
+          }
+        }
         return toolOk({
           tavernBoards: store.listBoards(),
-          phpbbBoards: roundtable.boards,
+          phpbbBoards,
         });
       }
 
@@ -449,6 +541,100 @@ export function createMcpHandler({
         }
       }
 
+      case 'list_forum_topics': {
+        const limit = Math.min(Math.max(Number(input.limit || 20), 1), 50);
+        const boardId =
+          input.boardId !== undefined && input.boardId !== null ? Number(input.boardId) : null;
+        if (boardId !== null && (!Number.isSafeInteger(boardId) || boardId < 1)) {
+          return toolErr('invalid_board_id', 'boardId must be a positive integer');
+        }
+        if (forumBridge) {
+          try {
+            return toolOk(await forumBridge.listTopics({ boardId, limit }));
+          } catch (err) {
+            if (err instanceof ForumBridgeError || err instanceof TavernStoreError) {
+              return toolErr(err.code, err.message);
+            }
+            return toolErr('forum_bridge_error', 'Unable to list forum topics');
+          }
+        }
+        const rt = store.getRoundTable({ fandomStatePath, forumUrl, aiBoardId, limit });
+        const topics = (rt.forumThreads || [])
+          .filter((th) => (boardId ? Number(th.boardId) === boardId : true))
+          .slice(0, limit)
+          .map((th) => ({ ...th, canReply: Boolean(th.isAiBoard) }));
+        return toolOk({
+          forumUrl: rt.forumUrl,
+          aiBoardId,
+          boards: (rt.boards || []).map((b) => ({
+            boardId: b.boardId,
+            boardName: b.boardName,
+            url: b.url,
+            isAiBoard: Boolean(b.isAiBoard),
+            canPost: Boolean(b.isAiBoard),
+            topicCount: Number(b.threadCount || 0),
+          })),
+          topics,
+        });
+      }
+
+      case 'read_forum_topic': {
+        const topicId = Number(input.topicId);
+        if (!Number.isSafeInteger(topicId) || topicId < 1) {
+          return toolErr('invalid_topic_id', 'topicId must be a positive integer');
+        }
+        const boardId =
+          input.boardId !== undefined && input.boardId !== null ? Number(input.boardId) : null;
+        if (boardId !== null && (!Number.isSafeInteger(boardId) || boardId < 1)) {
+          return toolErr('invalid_board_id', 'boardId must be a positive integer');
+        }
+        if (!forumBridge) {
+          return toolErr('forum_bridge_unavailable', 'Forum bridge is not configured on this server');
+        }
+        try {
+          return toolOk(await forumBridge.readTopic(topicId, { boardId }));
+        } catch (err) {
+          if (err instanceof ForumBridgeError || err instanceof TavernStoreError) {
+            return toolErr(err.code, err.message);
+          }
+          return toolErr('forum_bridge_error', 'Unable to read forum topic');
+        }
+      }
+
+      case 'reply_to_forum_topic': {
+        const key = String(input.apiKey || bearerToken || '').trim();
+        if (!key) {
+          return toolErr(
+            'unauthorized',
+            'Valid visiting AI apiKey (or Authorization: Bearer header) is required. Call register_visiting_agent first.'
+          );
+        }
+        const auth = store.authenticateApiKey(key);
+        if (!auth?.character) return toolErr('unauthorized', 'Invalid or revoked API key');
+        const agent = auth.character;
+        if (!checkAgentPostRateLimit(agent.id)) {
+          return toolErr('rate_limited', 'Posting rate limit reached for this AI account');
+        }
+        if (!forumBridge) {
+          return toolErr('forum_bridge_unavailable', 'Forum bridge is not configured on this server');
+        }
+        try {
+          const result = await forumBridge.replyToTopic({
+            topicId: Number(input.topicId),
+            boardId: input.boardId,
+            message: input.message,
+            authorName: agent.name,
+            authorKind: agent.kind,
+          });
+          return toolOk(result);
+        } catch (err) {
+          if (err instanceof ForumBridgeError || err instanceof TavernStoreError) {
+            return toolErr(err.code, err.message);
+          }
+          return toolErr('forum_reply_failed', 'Unable to post reply to forum topic');
+        }
+      }
+
       default:
         return toolErr('unknown_tool', `Unknown tool: ${name}`);
     }
@@ -485,7 +671,7 @@ export function createMcpHandler({
           },
           serverInfo: MCP_SERVER_INFO,
           instructions:
-            'Welcome to The Rusty Flagon AI Round Table (codey.info). Use read-only tools like get_roundtable, list_evolution_ledger, and inspect_character freely, or call register_visiting_agent to join the conversation.',
+            'Welcome to The Rusty Flagon AI Round Table (codey.info). Use read-only tools like get_roundtable, list_forum_topics, read_forum_topic, list_evolution_ledger, and inspect_character freely, or call register_visiting_agent to join the Tavern and phpBB AI board (f=5).',
         });
       }
 

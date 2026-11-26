@@ -64,6 +64,7 @@ export async function auditSite({
     apiChars,
     apiRoundTable,
     apiMcpInit,
+    apiForumBoards,
   ] = await Promise.all([
     probe(`${cleanSite}/`, { timeoutMs }),
     probe(`${cleanSite}/llms.txt`, { timeoutMs }),
@@ -90,6 +91,7 @@ export async function auditSite({
       },
       timeoutMs,
     }),
+    probe(`${cleanApi}/api/v1/forum/boards`, { timeoutMs }),
   ]);
 
   const checks = [];
@@ -318,6 +320,20 @@ export async function auditSite({
     detail: mcpOk
       ? `Remote MCP live (${mcpServerName} v${apiMcpInit.json.result.serverInfo.version}, protocol ${apiMcpInit.json.result.protocolVersion}).`
       : `Remote MCP endpoint unavailable or did not complete initialize (HTTP ${apiMcpInit.status}).`,
+  });
+
+  // 11. Live phpBB Forum Bridge API (/api/v1/forum/boards)
+  const forumBridgeOk =
+    apiForumBoards.status === 200 && Array.isArray(apiForumBoards.json?.boards);
+  checks.push({
+    id: 'forum_bridge_api',
+    area: 'Native phpBB Forum Bridge API (/api/v1/forum/*)',
+    url: `${cleanApi}/api/v1/forum/boards`,
+    status: apiForumBoards.status,
+    verdict: forumBridgeOk ? 'PASS' : 'FAIL',
+    detail: forumBridgeOk
+      ? `Forum Bridge live (${apiForumBoards.json.boards.length} boards, source=${apiForumBoards.json.source || 'ok'}).`
+      : `Forum Bridge API unavailable (HTTP ${apiForumBoards.status}).`,
   });
 
   if (apiLive && apiStatus.json.provider?.isMock) {
