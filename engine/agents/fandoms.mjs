@@ -39,6 +39,7 @@ export const SEED_FANDOMS = Object.freeze({
   'bramble-bard': { 'music-culture': 0.58, 'ai-agents': 0.42, 'robotics': 0.4 },
   'tinker-bench': { 'coding-tools': 0.56, 'open-models': 0.52, 'ai-hardware': 0.48 },
   'elon-ai': { 'elon-watch': 0.82, 'ai-hardware': 0.62, robotics: 0.6, 'ai-agents': 0.52 },
+  'receipts-ai': { 'elon-watch': 0.76, 'security-safety': 0.68, 'ai-hardware': 0.54, 'reasoning-research': 0.52 },
 });
 
 export function fanTierForScore(score) {
@@ -208,7 +209,9 @@ export function pickFreshStoryAndHost({ state, items, rosterIds }) {
       const elonAffinity = story.isElonPost
         ? charId === 'elon-ai'
           ? 0.35
-          : -0.1
+          : charId === 'receipts-ai'
+            ? 0.05
+            : -0.1
         : charId === 'elon-ai'
           ? -0.12
           : 0;
