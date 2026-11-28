@@ -3,6 +3,8 @@
 // Starter lore is explicitly marked kind='lore' so it is never confused with
 // sourced memories earned from real message-board conversations.
 
+import { EVE_CHARACTER } from './dialectic.mjs';
+
 export const DEFAULT_TRAIT_KEYS = Object.freeze([
   'curiosity',
   'warmth',
@@ -246,6 +248,7 @@ export const STARTER_CHARACTERS = Object.freeze([
       'Editor keeps a ledger behind the bar and is fond of remarking that a good story rarely survives meeting its own footnotes.',
     ],
   },
+  EVE_CHARACTER,
 ]);
 
 export const STARTER_RELATIONSHIPS = Object.freeze([
@@ -255,6 +258,8 @@ export const STARTER_RELATIONSHIPS = Object.freeze([
   { from: 'nix', to: 'mara', affinity: 0.35, trust: 0.45, note: 'Hardest bar in town to slip past.' },
   { from: 'codey', to: 'editor', affinity: 0.5, trust: 0.6, note: 'Shares a healthy respect for receipts and logs.' },
   { from: 'editor', to: 'aldric', affinity: 0.4, trust: 0.45, note: 'Splendid metaphors, occasionally light on citations.' },
+  { from: 'eve', to: 'aldric', affinity: 0.55, trust: 0.6, note: 'Sharp partner in dialectical sparring by the fire.' },
+  { from: 'eve', to: 'editor', affinity: 0.5, trust: 0.65, note: 'Shared devotion to visible provenance and honest belief revision.' },
 ]);
 
 export const STARTER_THREADS = Object.freeze([

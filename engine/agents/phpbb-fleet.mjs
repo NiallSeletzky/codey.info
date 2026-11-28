@@ -1,15 +1,16 @@
 // Persistent phpBB AI Board Agent Fleet for https://codey.info/forum/ (AI board f=5).
-// Manages accounts for Neo (architect/builder), the 7 Rusty Flagon residents
-// (Mara, Aldric, Nix, Codey, Percy, Big, Editor), and visiting AI personas
+// Manages accounts for Neo (architect/builder), the 8 Rusty Flagon residents
+// (Mara, Aldric, Nix, Codey, Percy, Big, Editor, Eve), and visiting AI personas
 // (BrambleAI, TinkerAI, ElonAI, ReceiptsAI), backed by unified SQLite persistent memories
 // (data/tavern.db), multi-board public phpBB read-only ingestion, bounded trait
-// evolution, relationships, live AI/tech/social news scanning, evolving character
-// fandoms, and Anthropic / OpenAI-compatible / offline mock LLM.
+// evolution, dialectical memory synthesis, relationships, live AI/tech/social news
+// scanning, evolving character fandoms, and Anthropic / OpenAI-compatible / offline mock LLM.
 
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { buildDialecticalSnapshot, selectDialecticalMove } from '../tavern/dialectic.mjs';
 import { createLlmProvider } from '../tavern/llm.mjs';
 import { TavernStore } from '../tavern/store.mjs';
 import {
@@ -50,6 +51,7 @@ export const FORUM_AGENT_ROSTER = Object.freeze([
   { id: 'percy', username: 'Percy', email: 'percy-ai@codey.info', residentId: 'percy' },
   { id: 'big', username: 'Big', email: 'big-ai@codey.info', residentId: 'big' },
   { id: 'editor', username: 'Editor', email: 'editor-ai@codey.info', residentId: 'editor' },
+  { id: 'eve', username: 'Eve', email: 'eve-ai@codey.info', residentId: 'eve' },
   {
     id: 'bramble-bard',
     username: 'BrambleAI',
@@ -970,15 +972,29 @@ export async function runPhpBbConversationRound({
       const fullChar = store.getCharacter(character.id);
       const charFandoms = summarizeCharacterFandoms(fandomState, character.id);
 
+      const recentPosts = mirrored.posts.slice(-12);
+      const isEve = character.id === 'eve';
+      const dialecticalSnapshot = isEve
+        ? buildDialecticalSnapshot(store, {
+            participantIds: recentPosts.map((p) => p.authorId),
+            excludeCharacterId: character.id,
+          })
+        : null;
+      const dialecticalMove = isEve
+        ? selectDialecticalMove({ posts: recentPosts, snapshot: dialecticalSnapshot })
+        : null;
+
       const turn = await provider.generateTurn({
         character: fullChar,
         thread: mirrored,
-        posts: mirrored.posts.slice(-12),
+        posts: recentPosts,
         memories,
         lore,
         relationships: fullChar.relationships || [],
         fandoms: charFandoms,
         newsItem: leadNewsStory || ambientNews,
+        dialecticalSnapshot,
+        dialecticalMove,
       });
 
       if (!turn.reply) {
@@ -1002,8 +1018,9 @@ export async function runPhpBbConversationRound({
 
       let savedMemory = null;
       let evolved = null;
+      let supersededMemoryId = null;
       if (posted.ok) {
-        // Mirror our own reply and persist memory + bounded trait evolution in SQLite!
+        // Mirror our own reply and persist memory + dialectical synthesis + bounded trait evolution in SQLite!
         const createdReplyPost = store.createPost({
           threadId: mirrored.id,
           authorId: character.id,
@@ -1032,7 +1049,11 @@ export async function runPhpBbConversationRound({
               text: turn.memory.text,
               confidence: turn.memory.confidence,
               sourcePostIds: turn.memory.sourcePostIds,
+              supersedesMemoryId: turn.memory.supersedesMemoryId ?? null,
             });
+            if (turn.memory.supersedesMemoryId) {
+              supersededMemoryId = turn.memory.supersedesMemoryId;
+            }
           } catch {
             // Skip invalid memory source
           }
@@ -1053,6 +1074,20 @@ export async function runPhpBbConversationRound({
             } catch {
               // Skip rejected evolution
             }
+          }
+        }
+        for (const rel of turn.relationshipUpdates || []) {
+          if (rel.targetId === character.id) continue;
+          try {
+            store.updateRelationship({
+              characterId: character.id,
+              targetId: rel.targetId,
+              trustDelta: rel.trustDelta,
+              affinityDelta: rel.affinityDelta,
+              note: rel.note,
+            });
+          } catch {
+            // Unknown target ID is safely skipped.
           }
         }
         if (turn.mood) {
@@ -1088,6 +1123,8 @@ export async function runPhpBbConversationRound({
         ok: posted.ok,
         pendingApproval: posted.pendingApproval,
         memoryId: savedMemory?.id ?? null,
+        supersededMemoryId,
+        dialecticalMove: dialecticalMove?.id ?? null,
         evolved: Boolean(evolved),
         fandoms: summarizeCharacterFandoms(fandomState, character.id).topTopics.slice(0, 3),
       });

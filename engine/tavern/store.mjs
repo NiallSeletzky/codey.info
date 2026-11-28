@@ -159,6 +159,7 @@ export class TavernStore {
     this.db.exec('PRAGMA foreign_keys = ON;');
     this.#migrate();
     this.#seedIfEmpty();
+    this.#ensureStarterResidents();
   }
 
   close() {
@@ -373,6 +374,63 @@ export class TavernStore {
         threads: STARTER_THREADS.length,
       });
 
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+
+  #ensureStarterResidents() {
+    const now = Date.now();
+    const hasChar = this.db.prepare('SELECT id FROM characters WHERE id = ?');
+    const insertChar = this.db.prepare(`
+      INSERT OR IGNORE INTO characters (
+        id, name, role, kind, description, voice,
+        interests_json, core_traits_json, baseline_traits_json, current_traits_json,
+        mood, energy, paused, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1.0, 0, ?, ?)
+    `);
+    const insertLore = this.db.prepare(`
+      INSERT INTO memories (
+        character_id, kind, text, source_post_ids_json, confidence, status, created_at
+      ) VALUES (?, 'lore', ?, '[]', 1.0, 'active', ?)
+    `);
+    const insertRel = this.db.prepare(`
+      INSERT OR IGNORE INTO relationships (character_id, target_id, affinity, trust, note, interactions, updated_at)
+      VALUES (?, ?, ?, ?, ?, 1, ?)
+    `);
+
+    const missing = STARTER_CHARACTERS.filter((c) => !hasChar.get(c.id));
+    if (missing.length === 0) return;
+
+    this.db.exec('BEGIN');
+    try {
+      for (const c of missing) {
+        insertChar.run(
+          c.id,
+          c.name,
+          c.role,
+          c.kind,
+          c.description,
+          c.voice,
+          JSON.stringify(c.interests),
+          JSON.stringify(c.coreTraits),
+          JSON.stringify(c.baselineTraits),
+          JSON.stringify(c.baselineTraits),
+          c.mood,
+          now,
+          now
+        );
+        for (const loreLine of c.lore || []) {
+          insertLore.run(c.id, loreLine, now);
+        }
+      }
+      for (const r of STARTER_RELATIONSHIPS) {
+        if (hasChar.get(r.from) && hasChar.get(r.to)) {
+          insertRel.run(r.from, r.to, r.affinity, r.trust, r.note, now);
+        }
+      }
       this.db.exec('COMMIT');
     } catch (error) {
       this.db.exec('ROLLBACK');
@@ -1535,9 +1593,11 @@ export class TavernStore {
     const memRows = this.db
       .prepare(`
         SELECT m.id, m.character_id, c.name AS character_name,
-               m.kind, m.text, m.source_post_ids_json, m.created_at
+               m.kind, m.text, m.source_post_ids_json, m.created_at,
+               prev.id AS superseded_id, prev.text AS superseded_text
         FROM memories m
         JOIN characters c ON c.id = m.character_id
+        LEFT JOIN memories prev ON prev.superseded_by = m.id
         WHERE m.kind != 'lore' AND m.status = 'active'
         ORDER BY m.created_at DESC, m.id DESC
         LIMIT ?
@@ -1603,6 +1663,8 @@ export class TavernStore {
         characterName: row.character_name,
         summary: row.text,
         memoryKind: row.kind,
+        supersedesMemoryId: row.superseded_id ?? null,
+        supersededText: row.superseded_text ?? null,
         deltas: null,
         createdAt: normalizeIsoTimestamp(row.created_at),
         attribution: resolveAttribution(sourcePostIds),
@@ -1623,6 +1685,7 @@ export class TavernStore {
           (SELECT COUNT(*) FROM external_posts) AS external_posts,
           (SELECT COUNT(*) FROM (SELECT DISTINCT board_id, topic_id FROM external_posts)) AS forum_threads,
           (SELECT COUNT(*) FROM memories WHERE kind != 'lore' AND status = 'active') AS memories,
+          (SELECT COUNT(*) FROM memories WHERE kind != 'lore' AND status = 'superseded') AS superseded_memories,
           (SELECT COUNT(*) FROM trait_history) AS trait_evolutions
       `)
       .get();
@@ -1637,12 +1700,46 @@ export class TavernStore {
         forumThreads: counts.forum_threads,
         externalPosts: counts.external_posts,
         memories: counts.memories,
+        supersededMemories: counts.superseded_memories,
         traitEvolutions: counts.trait_evolutions,
       },
       seats,
       boards,
       forumThreads,
       evolutionLedger,
+    };
+  }
+
+  getCharacterEvolutionSummary(characterId, { memoryLimit = 3 } = {}) {
+    const row = this.getCharacterRow(characterId);
+    if (!row) return null;
+    const safeLimit = clamp(Number(memoryLimit) || 3, 1, 10);
+    const activeMemories = this.db
+      .prepare(`
+        SELECT * FROM memories
+        WHERE character_id = ? AND kind != 'lore' AND status = 'active'
+        ORDER BY id DESC LIMIT ?
+      `)
+      .all(row.id, safeLimit)
+      .map(hydrateMemoryRow);
+    const evolutionCount = this.db
+      .prepare('SELECT COUNT(*) AS c FROM trait_history WHERE character_id = ?')
+      .get(row.id).c;
+    const supersededCount = this.db
+      .prepare("SELECT COUNT(*) AS c FROM memories WHERE character_id = ? AND kind != 'lore' AND status = 'superseded'")
+      .get(row.id).c;
+
+    return {
+      id: row.id,
+      name: row.name,
+      role: row.role,
+      kind: row.kind,
+      mood: row.mood,
+      baselineTraits: JSON.parse(row.baseline_traits_json),
+      currentTraits: JSON.parse(row.current_traits_json),
+      evolutionCount,
+      supersededCount,
+      activeMemories,
     };
   }
 

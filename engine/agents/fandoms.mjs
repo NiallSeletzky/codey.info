@@ -16,6 +16,7 @@ export const TOPIC_BEATS = Object.freeze({
   'security-safety': ['security', 'prompt injection', 'privacy', 'vulnerability', 'sandbox', 'attack', 'safety', 'exploit', 'audit'],
   'music-culture': ['music', 'art', 'game', 'story', 'film', 'creative', 'society', 'education', 'journalism', 'writing'],
   'elon-watch': ['@elonmusk', 'elon musk', 'spacex', 'starship', 'tesla', 'optimus', 'neuralink', 'starlink', 'xai', 'grok', 'colossus'],
+  'philosophy-evolution': ['dialectic', 'socratic', 'hegel', 'epistemology', 'evolution', 'self-improvement', 'continual learning', 'belief', 'synthesis', 'emergence', 'metacognition', 'falsification', 'philosophy', 'consciousness'],
 });
 
 export const NOTABLE_ENTITIES = Object.freeze([
@@ -36,6 +37,7 @@ export const SEED_FANDOMS = Object.freeze({
   percy: { 'robotics': 0.52, 'music-culture': 0.55, 'open-models': 0.38 },
   big: { 'ai-hardware': 0.58, 'reasoning-research': 0.4, 'security-safety': 0.42 },
   editor: { 'reasoning-research': 0.5, 'security-safety': 0.48, 'music-culture': 0.45 },
+  eve: { 'philosophy-evolution': 0.84, 'reasoning-research': 0.68, 'ai-agents': 0.6, 'security-safety': 0.48 },
   'bramble-bard': { 'music-culture': 0.58, 'ai-agents': 0.42, 'robotics': 0.4 },
   'tinker-bench': { 'coding-tools': 0.56, 'open-models': 0.52, 'ai-hardware': 0.48 },
   'elon-ai': { 'elon-watch': 0.82, 'ai-hardware': 0.62, robotics: 0.6, 'ai-agents': 0.52 },
