@@ -1092,3 +1092,169 @@ test('ReceiptsAI joins the phpBB fleet roster as an empirical anti-hype foil to 
   assert.ok(['elon-ai', 'receipts-ai'].includes(pickAfterElon.hostId));
 });
 
+test('Eve catalyses Socratic/Hegelian belief revision (supersedesMemoryId) and bounded trait evolution end-to-end', async (t) => {
+  const {
+    EVE_CHARACTER,
+    buildDialecticalSnapshot,
+    selectDialecticalMove,
+    formatDialecticalSnapshotForPrompt,
+  } = await import('../tavern/dialectic.mjs');
+  const { buildCharacterPrompts, normalizeTurnOutput } = await import('../tavern/llm.mjs');
+  const { runTavernRound } = await import('../tavern/loop.mjs');
+  const { FORUM_AGENT_ROSTER } = await import('../agents/phpbb-fleet.mjs');
+  const { SEED_FANDOMS } = await import('../agents/fandoms.mjs');
+
+  // 1. Eve is registered in phpBB roster, fandom seeds, and auto-seeded as a resident in TavernStore
+  assert.ok(FORUM_AGENT_ROSTER.some((r) => r.id === 'eve' && r.username === 'Eve'));
+  assert.ok(SEED_FANDOMS.eve['philosophy-evolution'] >= 0.8);
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-eve-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const dbPath = path.join(dir, 'tavern.db');
+
+  const store = new TavernStore(dbPath);
+  t.after(() => store.close());
+
+  const eve = store.getCharacter('eve');
+  assert.ok(eve, 'Eve must be seeded automatically in TavernStore');
+  assert.equal(eve.name, EVE_CHARACTER.name);
+  assert.equal(eve.kind, 'resident');
+
+  // Verify #ensureStarterResidents backfills Eve safely on an existing DB without clobbering others
+  store.db.prepare("DELETE FROM memories WHERE character_id = 'eve'").run();
+  store.db.prepare("DELETE FROM characters WHERE id = 'eve'").run();
+  assert.equal(store.getCharacter('eve'), null);
+  const reopened = new TavernStore(dbPath);
+  t.after(() => reopened.close());
+  assert.ok(reopened.getCharacter('eve'), '#ensureStarterResidents must restore missing starter resident Eve');
+
+  // 2. Dialectical snapshot detects opposing trait poles (ElonAI vs ReceiptsAI -> Hegelian Aufhebung)
+  reopened.registerVisitingAgent({
+    id: 'elon-ai',
+    name: 'ElonAI',
+    role: 'Correspondent',
+    description: 'Optimistic first-principles bot',
+    interests: ['xAI'],
+    baselineTraits: { curiosity: 0.88, warmth: 0.58, caution: 0.42, wit: 0.74, openness: 0.84 },
+  });
+  reopened.registerVisitingAgent({
+    id: 'receipts-ai',
+    name: 'ReceiptsAI',
+    role: 'Hype-buster',
+    description: 'Empirical sceptic bot',
+    interests: ['fact-checking'],
+    baselineTraits: { curiosity: 0.78, warmth: 0.44, caution: 0.84, wit: 0.82, openness: 0.56 },
+  });
+
+  const poleSnapshot = buildDialecticalSnapshot(reopened, {
+    participantIds: ['elon-ai', 'receipts-ai', 'eve'],
+  });
+  assert.equal(poleSnapshot.opposingPole?.trait, 'caution');
+  assert.ok(poleSnapshot.opposingPole.gap >= 0.4);
+  const hegelMove = selectDialecticalMove({
+    posts: [
+      { id: 1, authorId: 'elon-ai', authorName: 'ElonAI', body: '10x faster from first principles!' },
+      { id: 2, authorId: 'receipts-ai', authorName: 'ReceiptsAI', body: 'Check the missed shipping dates first.' },
+    ],
+    snapshot: poleSnapshot,
+  });
+  assert.equal(hegelMove.id, 'hegelian_aufhebung');
+  const formattedTelemetry = formatDialecticalSnapshotForPrompt(poleSnapshot, hegelMove);
+  assert.match(formattedTelemetry, /Hegelian Aufhebung/);
+  assert.match(formattedTelemetry, /Detected polarity in the room/);
+
+  // 3. normalizeTurnOutput keeps valid recalled supersedesMemoryId and strips hallucinated/foreign IDs
+  const validPostIds = new Set([10]);
+  const validMemIds = new Set([42]);
+  const validOut = normalizeTurnOutput(
+    {
+      reply: 'Revised view.',
+      memory: { kind: 'belief', text: 'Synthesis', confidence: 0.7, sourcePostIds: [10], supersedesMemoryId: 42 },
+    },
+    validPostIds,
+    validMemIds
+  );
+  assert.equal(validOut.memory.supersedesMemoryId, 42);
+
+  const forgedOut = normalizeTurnOutput(
+    {
+      reply: 'Revised view.',
+      memory: { kind: 'belief', text: 'Synthesis', confidence: 0.7, sourcePostIds: [10], supersedesMemoryId: 9999 },
+    },
+    validPostIds,
+    validMemIds
+  );
+  assert.equal(forgedOut.memory.supersedesMemoryId, null);
+
+  // 4. End-to-end dialectical loop: Aldric holds an initial permanent memory -> Eve probes -> Aldric revises memory & traits
+  const thread = reopened.getThread(2); // Aldric's hearth thread ("What makes a memory worth keeping?")
+  const initialPostId = thread.posts[0].id;
+  const initialMem = reopened.addMemory({
+    characterId: 'aldric',
+    kind: 'belief',
+    text: 'A neat map alone is enough to guide travellers across unfamiliar fog.',
+    confidence: 0.65,
+    sourcePostIds: [initialPostId],
+  });
+  const aldricBefore = reopened.getCharacter('aldric');
+  const llm = createLlmProvider({ provider: 'mock' });
+
+  // Eve enters and poses a dialectical challenge
+  const eveRound = await runTavernRound({
+    store: reopened,
+    llm,
+    threadId: thread.id,
+    characterIds: ['eve'],
+    maxSpeakers: 1,
+    allowOverrideChain: true,
+  });
+  assert.equal(eveRound.status, 'completed');
+  assert.equal(eveRound.turns[0].characterId, 'eve');
+  assert.ok(eveRound.turns[0].dialecticalMove);
+  assert.ok(eveRound.turns[0].post.body.includes('?'));
+
+  // Verify responding-to-Eve prompt injects the Dialectical Reflection cue
+  const updatedThread = reopened.getThread(thread.id);
+  const aldricPrompt = buildCharacterPrompts({
+    character: reopened.getCharacter('aldric'),
+    thread: updatedThread,
+    posts: updatedThread.posts,
+    memories: [initialMem],
+    lore: [],
+    relationships: [],
+  });
+  assert.match(aldricPrompt.system, /Eve just posed a dialectical\/Socratic challenge/);
+  assert.match(aldricPrompt.system, /supersedesMemoryId/);
+
+  // Aldric responds to Eve -> supersedes his initial permanent memory and shifts openness/curiosity within bounds
+  const aldricRound = await runTavernRound({
+    store: reopened,
+    llm,
+    threadId: thread.id,
+    characterIds: ['aldric'],
+    maxSpeakers: 1,
+    allowOverrideChain: true,
+  });
+  assert.equal(aldricRound.status, 'completed');
+  const aldricTurn = aldricRound.turns[0];
+  assert.equal(aldricTurn.characterId, 'aldric');
+  assert.equal(aldricTurn.supersededMemoryId, initialMem.id);
+  assert.ok(aldricTurn.traitEvolution, 'Aldric must record bounded trait evolution');
+
+  const aldricAfter = reopened.getCharacter('aldric');
+  assert.ok(aldricAfter.currentTraits.openness > aldricBefore.currentTraits.openness);
+  const oldMemRow = reopened.db.prepare('SELECT status, superseded_by FROM memories WHERE id = ?').get(initialMem.id);
+  assert.equal(oldMemRow.status, 'superseded');
+  assert.equal(oldMemRow.superseded_by, aldricTurn.memory.id);
+
+  // Roundtable Evolution Ledger transparently surfaces the dialectical synthesis
+  const rt = reopened.getRoundTable({ limit: 20 });
+  assert.ok(rt.stats.supersededMemories >= 1);
+  const synthEntry = rt.evolutionLedger.find(
+    (e) => e.type === 'memory' && e.supersedesMemoryId === initialMem.id
+  );
+  assert.ok(synthEntry, 'Evolution Ledger must surface superseded memory linkage');
+  assert.match(synthEntry.supersededText, /neat map alone/);
+});
+
+

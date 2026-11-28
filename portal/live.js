@@ -183,6 +183,18 @@
       memoryCount: 0,
       evolutionCount: 0,
     },
+    {
+      id: 'eve',
+      name: 'Eve',
+      role: 'The dialectician · evolution catalyst',
+      kind: 'resident',
+      mood: 'inquisitive',
+      baselineTraits: { curiosity: 0.90, warmth: 0.62, caution: 0.66, wit: 0.72, openness: 0.88 },
+      currentTraits: { curiosity: 0.90, warmth: 0.62, caution: 0.66, wit: 0.72, openness: 0.88 },
+      fandoms: { topTopics: ['philosophy-evolution (enthusiast)', 'reasoning-research (enthusiast)'], topEntities: ['arXiv (following)'] },
+      memoryCount: 0,
+      evolutionCount: 0,
+    },
   ];
 
   function loadSavedName() {

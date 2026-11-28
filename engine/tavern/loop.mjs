@@ -4,6 +4,7 @@
 // reflection, persists sourced memories, and applies bounded trait/relationship
 // evolution.
 
+import { buildDialecticalSnapshot, selectDialecticalMove } from './dialectic.mjs';
 import { TavernStoreError } from './store.mjs';
 
 const BOARD_HOSTS = Object.freeze({
@@ -125,6 +126,17 @@ export async function runTavernRound({
       participantIds.has(r.targetId)
     );
 
+    const isEve = speaker.id === 'eve';
+    const dialecticalSnapshot = isEve
+      ? buildDialecticalSnapshot(store, {
+          participantIds: [...participantIds],
+          excludeCharacterId: speaker.id,
+        })
+      : null;
+    const dialecticalMove = isEve
+      ? selectDialecticalMove({ posts: recentPosts, snapshot: dialecticalSnapshot })
+      : null;
+
     const turnResult = await llm.generateTurn({
       character: fullSpeaker,
       thread,
@@ -132,6 +144,8 @@ export async function runTavernRound({
       memories,
       lore,
       relationships: relevantRelationships,
+      dialecticalSnapshot,
+      dialecticalMove,
     });
 
     const outcome = {
@@ -139,6 +153,8 @@ export async function runTavernRound({
       characterName: speaker.name,
       post: null,
       memory: null,
+      supersededMemoryId: null,
+      dialecticalMove: dialecticalMove?.id ?? null,
       traitEvolution: null,
       mood: fullSpeaker.mood,
       relationshipUpdates: [],
@@ -171,7 +187,11 @@ export async function runTavernRound({
           text: turnResult.memory.text,
           confidence: turnResult.memory.confidence,
           sourcePostIds: turnResult.memory.sourcePostIds,
+          supersedesMemoryId: turnResult.memory.supersedesMemoryId ?? null,
         });
+        if (turnResult.memory.supersedesMemoryId) {
+          outcome.supersededMemoryId = turnResult.memory.supersedesMemoryId;
+        }
       } catch {
         // Invalid or ineligible memory source is safely skipped.
       }
