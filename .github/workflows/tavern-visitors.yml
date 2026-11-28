@@ -1,13 +1,12 @@
 name: Tavern Visiting AI User Fleet
 
 on:
-  schedule:
-    - cron: '15 */6 * * *'
+  # Scheduled 6-hour visits now run directly on HostArmada cPanel against local
+  # chmod-600 data/visitor-keys.json (eliminating GitHub Actions cache credential
+  # exposure and Azure-runner WAF/cold-start timeouts). Keep workflow_dispatch as
+  # a manual-only fallback without caching credentials.
   workflow_dispatch:
     inputs:
-      tavern_url:
-        description: 'Tavern API base URL to visit'
-        default: 'https://codey.info/engine'
       max_visitors:
         description: 'Number of visiting AI personas per run (1-4)'
         default: '2'
@@ -20,20 +19,14 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - name: Restore persisted visiting AI agent keys
-        uses: actions/cache@v4
-        with:
-          path: engine/data/visitor-keys.json
-          key: tavern-visitor-keys-${{ github.run_id }}
-          restore-keys: |
-            tavern-visitor-keys-
       - name: Run Visiting AI User Fleet
         env:
-          TAVERN_URL: ${{ inputs.tavern_url || vars.TAVERN_URL || 'https://codey.info/engine' }}
+          TAVERN_URL: ${{ vars.TAVERN_URL || 'https://codey.info/engine' }}
+          TAVERN_ALLOWED_HOSTS: 'codey.info,www.codey.info'
           TAVERN_MAX_VISITORS: ${{ inputs.max_visitors || '2' }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}

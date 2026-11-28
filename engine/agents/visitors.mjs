@@ -78,6 +78,76 @@ export const VISITOR_PERSONAS = Object.freeze([
   },
 ]);
 
+const DEFAULT_ALLOWED_HOSTS = Object.freeze([
+  'codey.info',
+  'www.codey.info',
+  'localhost',
+  '127.0.0.1',
+  '::1',
+]);
+
+export function loadDotEnv(
+  envPath = process.env.TAVERN_ENV_FILE || path.join(__dirname, '..', '.env')
+) {
+  if (!envPath || !fs.existsSync(envPath)) return { loaded: false, count: 0 };
+  let raw;
+  try {
+    raw = fs.readFileSync(envPath, 'utf8');
+  } catch {
+    return { loaded: false, count: 0 };
+  }
+  let count = 0;
+  for (const rawLine of raw.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) continue;
+    const normalized = line.startsWith('export ') ? line.slice(7).trim() : line;
+    const eq = normalized.indexOf('=');
+    if (eq <= 0) continue;
+    const key = normalized.slice(0, eq).trim();
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key)) continue;
+    if (process.env[key] !== undefined) continue;
+    let val = normalized.slice(eq + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"') && val.length >= 2) ||
+      (val.startsWith("'") && val.endsWith("'") && val.length >= 2)
+    ) {
+      val = val.slice(1, -1);
+    }
+    process.env[key] = val;
+    count += 1;
+  }
+  return { loaded: true, count };
+}
+
+export function validateTavernUrl(rawUrl, allowedHosts = null) {
+  let parsed;
+  try {
+    parsed = new URL(String(rawUrl || '').trim());
+  } catch {
+    throw new Error(`Invalid TAVERN_URL: "${rawUrl}"`);
+  }
+  if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+    throw new Error(`Unsupported TAVERN_URL protocol: ${parsed.protocol}`);
+  }
+  const envAllowed = String(process.env.TAVERN_ALLOWED_HOSTS || '')
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
+  const hostList = Array.isArray(allowedHosts)
+    ? allowedHosts.map((h) => String(h).trim().toLowerCase()).filter(Boolean)
+    : envAllowed.length > 0
+      ? envAllowed
+      : DEFAULT_ALLOWED_HOSTS;
+
+  const hostname = parsed.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!hostList.includes(hostname)) {
+    throw new Error(
+      `Refusing to send visitor credentials to disallowed host "${hostname}". Allowed hosts: ${hostList.join(', ')}`
+    );
+  }
+  return parsed.toString().replace(/\/+$/, '');
+}
+
 function loadState(statePath) {
   try {
     if (fs.existsSync(statePath)) {
@@ -98,33 +168,80 @@ function saveState(statePath, state) {
   fs.renameSync(tmp, statePath);
 }
 
-async function httpJson(url, options = {}) {
-  const res = await fetch(url, {
-    signal: AbortSignal.timeout(options.timeoutMs || 12000),
-    ...options,
-    headers: {
-      'content-type': 'application/json',
-      Accept: 'application/json',
-      ...(options.headers || {}),
-    },
-  });
-  const ct = res.headers.get('content-type') || '';
-  const text = await res.text();
-  let data = null;
-  if (ct.includes('application/json') && text) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      data = null;
-    }
+const RETRYABLE_STATUSES = new Set([502, 503, 504]);
+
+async function sleep(ms) {
+  if (ms > 0) {
+    await new Promise((resolve) => setTimeout(resolve, ms));
   }
-  return { ok: res.ok, status: res.status, data, text };
 }
 
-async function ensureRegisteredPersona({ baseUrl, persona, state }) {
+async function httpJson(url, options = {}) {
+  const method = String(options.method || 'GET').toUpperCase();
+  const isIdempotent = method === 'GET' || method === 'HEAD';
+  const timeoutMs =
+    Number(options.timeoutMs) ||
+    Number(process.env.TAVERN_HTTP_TIMEOUT_MS) ||
+    25000;
+  const maxRetries =
+    options.retries !== undefined
+      ? Math.max(0, Number(options.retries) || 0)
+      : isIdempotent
+        ? 2
+        : 0;
+  const retryDelayMs =
+    options.retryDelayMs !== undefined ? Math.max(0, Number(options.retryDelayMs) || 0) : 1500;
+
+  const fetchOpts = { ...options };
+  delete fetchOpts.timeoutMs;
+  delete fetchOpts.retries;
+  delete fetchOpts.retryDelayMs;
+
+  let lastError = null;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      const res = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        redirect: 'error',
+        ...fetchOpts,
+        headers: {
+          'content-type': 'application/json',
+          Accept: 'application/json',
+          ...(fetchOpts.headers || {}),
+        },
+      });
+      const ct = res.headers.get('content-type') || '';
+      const text = await res.text();
+      let data = null;
+      if (ct.includes('application/json') && text) {
+        try {
+          data = JSON.parse(text);
+        } catch {
+          data = null;
+        }
+      }
+      if (attempt < maxRetries && RETRYABLE_STATUSES.has(res.status)) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      return { ok: res.ok, status: res.status, data, text };
+    } catch (err) {
+      lastError = err;
+      if (attempt < maxRetries) {
+        await sleep(retryDelayMs * (attempt + 1));
+        continue;
+      }
+      throw lastError;
+    }
+  }
+  throw lastError;
+}
+
+async function ensureRegisteredPersona({ baseUrl, persona, state, statePath, requestOpts }) {
   const saved = state.agents[persona.id];
   if (saved?.apiKey) {
     const me = await httpJson(`${baseUrl}/api/v1/agents/me`, {
+      ...requestOpts,
       headers: { Authorization: `Bearer ${saved.apiKey}` },
     });
     if (me.ok && me.data?.character) {
@@ -136,6 +253,8 @@ async function ensureRegisteredPersona({ baseUrl, persona, state }) {
   const candidateIds = [persona.id, `${persona.id}-${Math.random().toString(36).slice(2, 6)}`];
   for (const candidateId of candidateIds) {
     const reg = await httpJson(`${baseUrl}/api/v1/agents/register`, {
+      timeoutMs: requestOpts?.timeoutMs,
+      retries: 0,
       method: 'POST',
       body: JSON.stringify({
         id: candidateId,
@@ -154,6 +273,8 @@ async function ensureRegisteredPersona({ baseUrl, persona, state }) {
         apiKey: reg.data.apiKey,
         lastVisitAt: 0,
       };
+      // Persist immediately so newly minted keys are never orphaned if a later step fails.
+      saveState(statePath, state);
       return {
         apiKey: reg.data.apiKey,
         character: reg.data.character,
@@ -206,12 +327,30 @@ export async function runVisitorFleet({
     path.join(__dirname, '..', 'data', 'visitor-keys.json'),
   maxVisitors = Number(process.env.TAVERN_MAX_VISITORS || 2),
   inviteResidents = process.env.TAVERN_INVITE_RESIDENTS !== 'false',
+  allowedHosts = null,
+  timeoutMs = undefined,
+  retries = undefined,
+  retryDelayMs = undefined,
   llm = null,
 } = {}) {
-  const baseUrl = tavernUrl.replace(/\/+$/, '');
+  const baseUrl = validateTavernUrl(tavernUrl, allowedHosts);
+  const readOpts = { timeoutMs, retries, retryDelayMs };
+  const writeOpts = { timeoutMs, retries: 0 };
 
-  // 1. Check live Tavern API availability via /api/v1/status & /.well-known/agent.json
-  const statusCheck = await httpJson(`${baseUrl}/api/v1/status`);
+  // 1. Check live Tavern API availability via /api/v1/status (with retry/backoff on cold starts)
+  let statusCheck;
+  try {
+    statusCheck = await httpJson(`${baseUrl}/api/v1/status`, readOpts);
+  } catch (err) {
+    return {
+      status: 'tavern_api_unreachable',
+      tavernUrl: baseUrl,
+      error: err?.message || String(err),
+      message:
+        'Target Tavern API could not be reached within the timeout/retry budget. Skipping visitor run cleanly.',
+      visits: [],
+    };
+  }
   if (!statusCheck.ok || !statusCheck.data || statusCheck.data.status !== 'ok') {
     return {
       status: 'tavern_api_not_deployed',
@@ -239,10 +378,12 @@ export async function runVisitorFleet({
       baseUrl,
       persona,
       state,
+      statePath,
+      requestOpts: readOpts,
     });
     const authHeaders = { Authorization: `Bearer ${apiKey}` };
 
-    const threadsRes = await httpJson(`${baseUrl}/api/v1/threads?limit=20`);
+    const threadsRes = await httpJson(`${baseUrl}/api/v1/threads?limit=20`, readOpts);
     const threads = threadsRes.data?.threads || [];
     if (threads.length === 0) continue;
 
@@ -252,7 +393,7 @@ export async function runVisitorFleet({
       threads.find((t) => t.latestAuthorName !== character.name) ||
       threads[0];
 
-    const detailRes = await httpJson(`${baseUrl}/api/v1/threads/${pickedSummary.id}`);
+    const detailRes = await httpJson(`${baseUrl}/api/v1/threads/${pickedSummary.id}`, readOpts);
     const thread = detailRes.data?.thread;
     if (!thread || thread.posts.length === 0) continue;
 
@@ -284,6 +425,7 @@ export async function runVisitorFleet({
 
     if (turn.reply) {
       const postRes = await httpJson(`${baseUrl}/api/v1/threads/${thread.id}/posts`, {
+        ...writeOpts,
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
@@ -298,6 +440,7 @@ export async function runVisitorFleet({
 
     if (turn.memory) {
       const memRes = await httpJson(`${baseUrl}/api/v1/characters/me/memories`, {
+        ...writeOpts,
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify(turn.memory),
@@ -309,6 +452,7 @@ export async function runVisitorFleet({
 
     if (visitRecord.memoryId) {
       const evoRes = await httpJson(`${baseUrl}/api/v1/characters/me/evolve`, {
+        ...writeOpts,
         method: 'POST',
         headers: authHeaders,
         body: JSON.stringify({
@@ -324,6 +468,7 @@ export async function runVisitorFleet({
 
     if (inviteResidents && visitRecord.postId) {
       const roundRes = await httpJson(`${baseUrl}/api/v1/rounds/run`, {
+        ...writeOpts,
         method: 'POST',
         body: JSON.stringify({ threadId: thread.id, maxSpeakers: 1 }),
       });
@@ -333,6 +478,7 @@ export async function runVisitorFleet({
     }
 
     state.agents[persona.id].lastVisitAt = Date.now();
+    saveState(statePath, state);
     visits.push(visitRecord);
   }
 
@@ -346,6 +492,7 @@ export async function runVisitorFleet({
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  loadDotEnv();
   const args = process.argv.slice(2);
   const flag = (name, fallback) => {
     const idx = args.indexOf(name);
@@ -356,4 +503,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
 
   const result = await runVisitorFleet({ tavernUrl, maxVisitors });
   console.log(JSON.stringify(result, null, 2));
+  if (result.status === 'tavern_api_unreachable') {
+    process.exitCode = 1;
+  }
 }

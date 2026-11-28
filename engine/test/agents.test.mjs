@@ -111,6 +111,85 @@ test('Visiting AI User Fleet persists keys across runs, interacts, remembers, an
   assert.ok(run3.visits.every((v) => v.newlyRegistered === false && v.postId && v.evolved));
 });
 
+test('Visiting AI User Fleet validates target host allowlist, loads .env safely, retries transient failures, and degrades cleanly on timeout', async (t) => {
+  const { loadDotEnv, validateTavernUrl } = await import('../agents/visitors.mjs');
+
+  // 1. Host allowlist & protocol checks prevent Bearer key exfiltration
+  assert.equal(validateTavernUrl('https://codey.info/engine/'), 'https://codey.info/engine');
+  assert.equal(validateTavernUrl('http://127.0.0.1:8787/engine'), 'http://127.0.0.1:8787/engine');
+  assert.throws(() => validateTavernUrl('https://evil.example.com/engine'), /disallowed host/i);
+  assert.throws(() => validateTavernUrl('file:///etc/passwd'), /Unsupported TAVERN_URL protocol/i);
+
+  // 2. .env loader reads unset variables without overwriting existing process.env values
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'tavern-visitors-env-'));
+  const envFile = path.join(dir, '.env');
+  const statePath = path.join(dir, 'visitor-keys.json');
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(
+    envFile,
+    '# comment\nTAVERN_TEST_LOADED_KEY="from_file"\nTAVERN_TEST_EXISTING_KEY=from_file\n',
+    'utf8'
+  );
+  process.env.TAVERN_TEST_EXISTING_KEY = 'from_env';
+  delete process.env.TAVERN_TEST_LOADED_KEY;
+  t.after(() => {
+    delete process.env.TAVERN_TEST_EXISTING_KEY;
+    delete process.env.TAVERN_TEST_LOADED_KEY;
+  });
+  const loaded = loadDotEnv(envFile);
+  assert.equal(loaded.loaded, true);
+  assert.equal(process.env.TAVERN_TEST_LOADED_KEY, 'from_file');
+  assert.equal(process.env.TAVERN_TEST_EXISTING_KEY, 'from_env');
+
+  // 3. Transient 503 on /api/v1/status recovers via retry without failing the run
+  let attempts = 0;
+  const flaky = http.createServer((req, res) => {
+    if (req.url === '/api/v1/status') {
+      attempts += 1;
+      if (attempts < 2) {
+        res.writeHead(503, { 'content-type': 'application/json' });
+        return res.end(JSON.stringify({ status: 'warming' }));
+      }
+      res.writeHead(200, { 'content-type': 'text/plain' });
+      return res.end('Tavern engine is running.\n');
+    }
+    res.writeHead(404);
+    res.end();
+  });
+  flaky.listen(0, '127.0.0.1');
+  await once(flaky, 'listening');
+  t.after(() => new Promise((resolve) => flaky.close(resolve)));
+
+  const recovered = await runVisitorFleet({
+    tavernUrl: `http://127.0.0.1:${flaky.address().port}`,
+    statePath,
+    timeoutMs: 1000,
+    retries: 2,
+    retryDelayMs: 10,
+  });
+  assert.equal(attempts, 2);
+  assert.equal(recovered.status, 'tavern_api_not_deployed');
+
+  // 4. Persistent timeout returns structured tavern_api_unreachable instead of throwing uncaught TimeoutError
+  const stalled = http.createServer((_req, _res) => {
+    // Deliberately never respond to trigger AbortSignal.timeout
+  });
+  stalled.listen(0, '127.0.0.1');
+  await once(stalled, 'listening');
+  t.after(() => new Promise((resolve) => stalled.close(resolve)));
+
+  const unreachable = await runVisitorFleet({
+    tavernUrl: `http://127.0.0.1:${stalled.address().port}`,
+    statePath,
+    timeoutMs: 60,
+    retries: 1,
+    retryDelayMs: 10,
+  });
+  assert.equal(unreachable.status, 'tavern_api_unreachable');
+  assert.equal(unreachable.visits.length, 0);
+  assert.ok(unreachable.error);
+});
+
 test('phpBB client parses topics/posts and phpBB fleet provisions accounts and replies with SQLite memory', async (t) => {
   const { parseForumTopics, parseTopicPosts, PhpBbClient } = await import('../agents/phpbb-client.mjs');
   const { runPhpBbConversationRound } = await import('../agents/phpbb-fleet.mjs');
