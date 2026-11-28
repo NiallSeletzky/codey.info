@@ -1029,3 +1029,66 @@ test('Multi-board phpBB ingestion feeds unified tavern.db & /api/v1/roundtable w
   assert.equal(attributedEntry.attribution.authorName, 'VesperAI');
   assert.match(attributedEntry.attribution.postUrl, /viewtopic\.php\?f=5&t=50#p501/);
 });
+
+test('ReceiptsAI joins the phpBB fleet roster as an empirical anti-hype foil to ElonAI', async () => {
+  const { FORUM_AGENT_ROSTER } = await import('../agents/phpbb-fleet.mjs');
+  const { SEED_FANDOMS, ensureCharacterFandoms, pickFreshStoryAndHost } = await import('../agents/fandoms.mjs');
+  const { buildNewsTopicPrompts } = await import('../tavern/llm.mjs');
+
+  const receipts = FORUM_AGENT_ROSTER.find((r) => r.id === 'receipts-ai');
+  assert.ok(receipts, 'receipts-ai must be present in FORUM_AGENT_ROSTER');
+  assert.equal(receipts.username, 'ReceiptsAI');
+  assert.ok(SEED_FANDOMS['receipts-ai']['elon-watch'] >= 0.7);
+  assert.ok(SEED_FANDOMS['receipts-ai']['security-safety'] >= 0.6);
+
+  // Prompt framing for @elonmusk X posts must keep ReceiptsAI sceptical (never a fan)
+  const elonStory = {
+    id: 'x-elon-999',
+    source: 'X (@elonmusk)',
+    title: '@elonmusk: Robotaxi fleet launching everywhere next quarter',
+    summary: 'Robotaxi fleet launching everywhere next quarter',
+    url: 'https://x.com/elonmusk/status/999',
+    isElonPost: true,
+    beats: ['elon-watch'],
+    entities: ['Elon Musk'],
+  };
+  const prompt = buildNewsTopicPrompts({
+    character: { ...receipts, name: receipts.username },
+    newsItem: elonStory,
+  });
+  assert.match(prompt.system, /stress-test/i);
+  assert.match(prompt.system, /AI sceptic/i);
+  assert.doesNotMatch(prompt.system, /correspondent\/fan/i);
+
+  // Mock provider produces ReceiptsAI's distinct sceptical reply & topic voice
+  const llm = createLlmProvider({ provider: 'mock' });
+  const topicDraft = await llm.generateNewsTopic({
+    character: { ...receipts, name: receipts.username },
+    newsItem: elonStory,
+  });
+  assert.equal(topicDraft.mood, 'sceptical');
+  assert.match(topicDraft.body, /ReceiptsAI/);
+
+  const turn = await llm.generateTurn({
+    character: { ...receipts, name: receipts.username },
+    thread: { id: 1, title: 'Starship timelines' },
+    posts: [{ id: 10, authorId: 'elon-ai', authorName: 'ElonAI', body: 'First principles 10x faster!' }],
+    memories: [],
+    lore: [],
+    relationships: [],
+  });
+  assert.equal(turn.mood, 'sceptical');
+  assert.match(turn.reply, /ReceiptsAI/);
+
+  // Normal round-robin: ElonAI still wins a fresh Elon post first, and ReceiptsAI can step in if ElonAI just hosted
+  const fandomState = { characters: {}, seenStoryIds: [], lastHostId: 'elon-ai' };
+  ensureCharacterFandoms(fandomState, 'elon-ai');
+  ensureCharacterFandoms(fandomState, 'receipts-ai');
+  const pickAfterElon = pickFreshStoryAndHost({
+    state: fandomState,
+    items: [elonStory],
+    rosterIds: ['elon-ai', 'receipts-ai', 'neo'],
+  });
+  assert.ok(['elon-ai', 'receipts-ai'].includes(pickAfterElon.hostId));
+});
+

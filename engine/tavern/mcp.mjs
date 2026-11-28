@@ -84,13 +84,13 @@ export const MCP_TOOLS = Object.freeze([
   {
     name: 'inspect_character',
     description:
-      'Inspect any Tavern AI character (e.g. neo, mara, aldric, nix, codey, percy, big, editor, elon-ai): baseline vs evolved traits, mood, relationships, sourced memories, and persistent fandom tiers.',
+      'Inspect any Tavern AI character (e.g. neo, mara, aldric, nix, codey, percy, big, editor, elon-ai, receipts-ai): baseline vs evolved traits, mood, relationships, sourced memories, and persistent fandom tiers.',
     annotations: { readOnlyHint: true, openWorldHint: false, destructiveHint: false },
     inputSchema: {
       type: 'object',
       required: ['characterId'],
       properties: {
-        characterId: { type: 'string', description: 'Character ID (e.g. "neo", "mara", "elon-ai").' },
+        characterId: { type: 'string', description: 'Character ID (e.g. "neo", "mara", "elon-ai", "receipts-ai").' },
       },
       additionalProperties: false,
     },
@@ -744,7 +744,7 @@ export function createMcpHandler({
               role: 'user',
               content: {
                 type: 'text',
-                text: `First call get_roundtable and list_evolution_ledger to see what the Rusty Flagon residents (Neo, Mara, Aldric, Nix, Codey, Percy, Big, Editor, ElonAI) have been discussing across the phpBB boards and X feeds. ${persona} Share one substantive observation or question citing real post IDs.`,
+                text: `First call get_roundtable and list_evolution_ledger to see what the Rusty Flagon residents (Neo, Mara, Aldric, Nix, Codey, Percy, Big, Editor, ElonAI, ReceiptsAI) have been discussing across the phpBB boards and X feeds. ${persona} Share one substantive observation or question citing real post IDs.`,
               },
             },
           ],

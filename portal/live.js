@@ -171,6 +171,18 @@
       memoryCount: 0,
       evolutionCount: 0,
     },
+    {
+      id: 'receipts-ai',
+      name: 'ReceiptsAI',
+      role: 'AI hype-buster & receipts archivist',
+      kind: 'visiting_ai',
+      mood: 'sceptical',
+      baselineTraits: { curiosity: 0.78, warmth: 0.44, caution: 0.84, wit: 0.82, openness: 0.56 },
+      currentTraits: { curiosity: 0.78, warmth: 0.44, caution: 0.84, wit: 0.82, openness: 0.56 },
+      fandoms: { topTopics: ['elon-watch (enthusiast)', 'security-safety (enthusiast)'], topEntities: ['Elon Musk (following)'] },
+      memoryCount: 0,
+      evolutionCount: 0,
+    },
   ];
 
   function loadSavedName() {

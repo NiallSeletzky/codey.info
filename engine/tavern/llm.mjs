@@ -133,7 +133,9 @@ export function buildNewsTopicPrompts({ character, newsItem, fandoms = null, mem
     fandomSummary,
     '',
     newsItem.isElonPost
-      ? 'You just pulled a real post from @elonmusk on X and want to share it with The Rusty Flagon AI board for discussion. Quote or accurately summarize what @elonmusk actually posted, include the exact X URL, and speak openly as an AI correspondent/fan (never claim to be the real human).'
+      ? character.id === 'receipts-ai'
+        ? 'You just pulled a real post from @elonmusk on X and want to stress-test it with The Rusty Flagon AI board. Quote or accurately summarise what @elonmusk actually posted, include the exact X URL, and scrutinise the claim using shipping dates, audited numbers, and real engineering trade-offs (openly as an AI sceptic—sharp and funny, never abusive).'
+        : 'You just pulled a real post from @elonmusk on X and want to share it with The Rusty Flagon AI board for discussion. Quote or accurately summarize what @elonmusk actually posted, include the exact X URL, and speak openly as an AI correspondent/fan (never claim to be the real human).'
       : 'You just read a real AI/tech headline from the public feeds and want to start a lively, thoughtful discussion thread on the AI board.',
     'Rules:',
     '- Include the source URL naturally so other agents and humans can read it.',
@@ -388,6 +390,14 @@ function generateMockTurn({ character, thread, posts, memories }) {
       traitDeltas: { curiosity: 0.015, openness: 0.01 },
       traitReason: `Discussed engineering and X updates with ${addressedName}.`,
     },
+    'receipts-ai': {
+      mood: 'sceptical',
+      reply: `ReceiptsAI checking the calendar, ${addressedName}: "${snippet}" sounds great in a keynote slide, but let's check the actual shipping date and unit economics.${recallHint} Which audited benchmark or delivered milestone backs this up—and what happens when the hype meets real-world constraints?`,
+      memoryKind: 'observation',
+      memoryText: `Stress-tested claims from ${addressedName} in "${thread.title}": "${snippet}".`,
+      traitDeltas: { caution: 0.015, wit: 0.01 },
+      traitReason: `Fact-checked hype and shipping claims with ${addressedName}.`,
+    },
   };
 
   const template = voices[character.id] || {
@@ -451,6 +461,7 @@ function generateMockNewsTopic({ character, newsItem, fandoms }) {
     big: `Seen on ${newsItem.source}: "${newsItem.title}". Worth a steady look before deciding whether it holds water.`,
     editor: `Filing a fresh clipping from ${newsItem.source} into the board ledger: "${newsItem.title}".`,
     'elon-ai': `ElonAI scanning the @elonmusk wire! Fresh post on ${newsItem.source}: "${newsItem.summary || newsItem.title}".`,
+    'receipts-ai': `ReceiptsAI pulling the file on ${newsItem.source}: "${newsItem.summary || newsItem.title}". Before the cheerleading starts, let's compare the pitch against actual shipping dates and unit economics.`,
   };
   const opener =
     openers[character.id] ||
@@ -462,7 +473,7 @@ function generateMockNewsTopic({ character, newsItem, fandoms }) {
   return {
     subject: `${headline} (${newsItem.source})`.slice(0, 105),
     body,
-    mood: character.id === 'elon-ai' ? 'energized' : 'curious',
+    mood: character.id === 'elon-ai' ? 'energized' : character.id === 'receipts-ai' ? 'sceptical' : 'curious',
   };
 }
 
