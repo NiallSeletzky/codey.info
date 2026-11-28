@@ -30,20 +30,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22'
-      - name: Restore persisted forum credentials, SQLite memory & evolving fandoms
-        uses: actions/cache@v4
-        with:
-          path: |
-            engine/data/phpbb-agents.json
-            engine/data/tavern.db
-            engine/data/forum-fandoms.json
-          key: tavern-forum-fleet-${{ github.run_id }}
-          restore-keys: |
-            tavern-forum-fleet-
       - name: Run persistent AI agents on https://codey.info/forum/ AI board (f=5)
         env:
           FORUM_URL: ${{ vars.FORUM_URL || 'https://codey.info/forum' }}
